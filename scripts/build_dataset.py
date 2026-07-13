@@ -22,6 +22,7 @@ from utils import (
     normalize_obwod,
     normalize_teryt,
     parse_int,
+    read_csv_file,
     read_csv_from_zip,
     short_party_name,
 )
@@ -43,9 +44,17 @@ def load_metadata(config: dict) -> pd.DataFrame:
 
 
 def load_boundaries(election: dict, election_id: str) -> gpd.GeoDataFrame:
-    url = election["boundaries"]["url"]
-    zip_path = RAW_DIR / election_id / "boundaries.zip"
-    download(url, zip_path)
+    boundaries_cfg = election["boundaries"]
+    local_path = boundaries_cfg.get("local_path")
+    if local_path:
+        zip_path = Path(local_path)
+        if not zip_path.is_absolute():
+            zip_path = ROOT / zip_path
+        if not zip_path.exists():
+            raise FileNotFoundError(f"Brak lokalnego pliku granic: {zip_path}")
+    else:
+        zip_path = RAW_DIR / election_id / "boundaries.zip"
+        download(boundaries_cfg["url"], zip_path)
     extract_dir = RAW_DIR / election_id / "boundaries"
     extract_zip(zip_path, extract_dir)
     shp = find_shapefile(extract_dir, election["boundaries"]["layer_suffix"])
@@ -56,8 +65,7 @@ def load_boundaries(election: dict, election_id: str) -> gpd.GeoDataFrame:
     return gdf
 
 
-def parse_sejm_results(zip_path: Path, teryt: str) -> pd.DataFrame:
-    df = read_csv_from_zip(zip_path)
+def parse_sejm_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
     df["teryt"] = df["TERYT Gminy"].map(normalize_teryt)
     df["obwod"] = df["Nr komisji"].map(normalize_obwod)
     df = df[df["teryt"] == teryt].copy()
@@ -91,8 +99,7 @@ def parse_sejm_results(zip_path: Path, teryt: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def parse_samorzad_results(zip_path: Path, teryt: str, inner_name: str) -> pd.DataFrame:
-    df = read_csv_from_zip(zip_path, inner_name=inner_name)
+def parse_samorzad_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
     df["teryt"] = df["Teryt Gminy"].map(normalize_teryt)
     df["obwod"] = df["Nr komisji"].map(normalize_obwod)
     df = df[df["teryt"] == teryt].copy()
@@ -131,8 +138,7 @@ def parse_samorzad_results(zip_path: Path, teryt: str, inner_name: str) -> pd.Da
     return pd.DataFrame(rows)
 
 
-def parse_prez_results(zip_path: Path, teryt: str) -> pd.DataFrame:
-    df = read_csv_from_zip(zip_path)
+def parse_prez_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
     teryt_col = next((col for col in df.columns if "TERYT" in col.upper() and "GMI" in col.upper()), None)
     obwod_col = next((col for col in df.columns if "NR" in col.upper() and "KOMIS" in col.upper()), "Nr komisji")
     if not teryt_col:
@@ -141,20 +147,38 @@ def parse_prez_results(zip_path: Path, teryt: str) -> pd.DataFrame:
     df["obwod"] = df[obwod_col].map(normalize_obwod)
     df = df[df["teryt"] == teryt].copy()
 
-    candidate_cols = [col for col in df.columns if str(col).startswith("Głosy na kandydata nr")]
+    eligible_col = next(
+        (col for col in df.columns if "Liczba wyborców uprawnionych do głosowania" in str(col)), None
+    )
+    voted_col = next(
+        (
+            col
+            for col in df.columns
+            if "wydano karty do głosowania" in str(col) and "łącznie" in str(col)
+        ),
+        None,
+    )
+    valid_col = next(
+        (col for col in df.columns if str(col).startswith("Liczba głosów ważnych oddanych łącznie")),
+        None,
+    )
+    if valid_col is None:
+        raise ValueError("Nie znaleziono kolumny z liczbą głosów ważnych")
+
+    # Kolumny kandydatów to wszystkie kolumny po kolumnie z liczbą głosów ważnych.
+    valid_idx = df.columns.get_loc(valid_col)
+    candidate_cols = [col for col in df.columns[valid_idx + 1 :] if col not in ("teryt", "obwod")]
+
     rows = []
     for _, row in df.iterrows():
-        eligible = parse_int(row.get("Liczba wyborców uprawnionych do głosowania"))
-        voted = parse_int(row.get("Liczba wyborców, którym wydano karty do głosowania"))
-        valid = parse_int(row.get("Liczba głosów ważnych"))
+        eligible = parse_int(row.get(eligible_col)) if eligible_col else 0
+        voted = parse_int(row.get(voted_col)) if voted_col else 0
+        valid = parse_int(row.get(valid_col))
         results = {}
         for col in candidate_cols:
             votes = parse_int(row.get(col))
-            if votes <= 0:
-                continue
-            match = re.search(r"-\s*(.+)$", str(col))
-            label = match.group(1).strip() if match else str(col)
-            results[label] = votes
+            if votes > 0:
+                results[str(col).strip()] = votes
         winner = max(results, key=results.get) if results else None
         rows.append(
             {
@@ -170,17 +194,30 @@ def parse_prez_results(zip_path: Path, teryt: str) -> pd.DataFrame:
 
 
 def load_results(election: dict, election_id: str, teryt: str) -> pd.DataFrame:
-    url = election["results"]["url"]
-    zip_path = RAW_DIR / election_id / "results.zip"
-    download(url, zip_path)
-    result_type = election["results"]["type"]
+    results_cfg = election["results"]
+    result_type = results_cfg["type"]
+
+    local_path = results_cfg.get("local_path")
+    if local_path:
+        csv_path = Path(local_path)
+        if not csv_path.is_absolute():
+            csv_path = ROOT / csv_path
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Brak lokalnego pliku wyników: {csv_path}")
+        df = read_csv_file(csv_path)
+    else:
+        url = results_cfg["url"]
+        zip_path = RAW_DIR / election_id / "results.zip"
+        download(url, zip_path)
+        inner_name = results_cfg.get("voivodeship_file")
+        df = read_csv_from_zip(zip_path, inner_name=inner_name)
+
     if result_type == "sejm_lists":
-        return parse_sejm_results(zip_path, teryt)
+        return parse_sejm_results(df, teryt)
     if result_type == "samorzad_lists":
-        inner_name = election["results"]["voivodeship_file"]
-        return parse_samorzad_results(zip_path, teryt, inner_name)
+        return parse_samorzad_results(df, teryt)
     if result_type == "prez_candidates":
-        return parse_prez_results(zip_path, teryt)
+        return parse_prez_results(df, teryt)
     raise ValueError(f"Nieobsługiwany typ wyników: {result_type}")
 
 

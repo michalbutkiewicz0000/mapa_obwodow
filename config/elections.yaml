@@ -24,3 +24,23 @@ elections:
       url: https://wybory.gov.pl/samorzad2024/data/csv/protokoly_po_obwodach_rady_gmin_powyzej_20k_csv.zip
       type: samorzad_lists
       voivodeship_file: wojewodztwo_małopolskie_utf8.csv
+
+  - id: prez2025_t1
+    label: Wybory prezydenckie 18.05.2025 (I tura)
+    boundaries:
+      url: https://msip.um.krakow.pl/Dane/2025_05_18_Wybory_Prezydenckie.zip
+      local_path: data/raw/prez2025/boundaries.zip
+      layer_suffix: Obwody
+    results:
+      local_path: data/raw/prez2025/protokoly_po_obwodach_utf8.csv
+      type: prez_candidates
+
+  - id: prez2025_t2
+    label: Wybory prezydenckie 01.06.2025 (II tura)
+    boundaries:
+      url: https://msip.um.krakow.pl/Dane/2025_05_18_Wybory_Prezydenckie.zip
+      local_path: data/raw/prez2025/boundaries.zip
+      layer_suffix: Obwody
+    results:
+      local_path: data/raw/prez2025/protokoly_po_obwodach_w_drugiej_turze_utf8.csv
+      type: prez_candidates

@@ -67,6 +67,10 @@ def read_csv_from_zip(zip_path: Path, inner_name: str | None = None) -> pd.DataF
     return pd.read_csv(io.BytesIO(content), sep=";", encoding="utf-8-sig", dtype=str)
 
 
+def read_csv_file(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, sep=";", encoding="utf-8-sig", dtype=str)
+
+
 def normalize_teryt(value: Any) -> str:
     if pd.isna(value):
         return ""

@@ -67,7 +67,7 @@ function styleFeature(feature, metric) {
   };
 }
 
-function renderLegend(metric) {
+function renderLegend(metric, data) {
   const legend = document.getElementById("legend");
   if (metric === "frekwencja") {
     legend.innerHTML = `
@@ -80,7 +80,12 @@ function renderLegend(metric) {
     `;
     return;
   }
-  const parties = ["PiS", "KO", "Trzecia Droga", "Lewica", "Konfederacja"];
+  const winners = new Set(
+    (data?.features || [])
+      .map((f) => f.properties.winner)
+      .filter(Boolean),
+  );
+  const parties = [...winners].sort();
   legend.innerHTML = `
     <h2>Legenda</h2>
     <ul>
@@ -150,7 +155,7 @@ async function loadElection(electionId) {
   currentData = await response.json();
   const electionInfo = manifest.elections.find((item) => item.id === electionId);
   renderStats(electionInfo, currentData);
-  renderLegend(metric);
+  renderLegend(metric, currentData);
   drawMap(currentData, metric);
 }
 
@@ -175,7 +180,7 @@ async function init() {
   select.addEventListener("change", () => loadElection(select.value));
   document.getElementById("metric").addEventListener("change", () => {
     if (currentData) {
-      renderLegend(document.getElementById("metric").value);
+      renderLegend(document.getElementById("metric").value, currentData);
       drawMap(currentData, document.getElementById("metric").value);
     }
   });

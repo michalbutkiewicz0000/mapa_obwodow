@@ -39,14 +39,16 @@ Pipeline:
 4. Wzbogaca metadanymi z Excela PKW (adres komisji, liczba wyborców, opis granic),
 5. Eksportuje **GeoJSON** do [`frontend/public/data/`](frontend/public/data/).
 
-**Działające wybory (Kraków, 411/411 dopasowanych wyników):**
+**Działające wybory (Kraków):**
 
 | ID | Opis | Granice | Wyniki |
 |----|------|---------|--------|
-| `sejm2023` | Wybory parlamentarne 15.10.2023 | MSIP shapefile 2023 | CSV PKW ogólnopolski |
-| `samorzad2024` | Wybory samorządowe 7.04.2024 (rady gmin) | MSIP shapefile 2024 | CSV PKW (woj. małopolskie) |
+| `sejm2023` | Wybory parlamentarne 15.10.2023 | MSIP shapefile 2023 | CSV PKW ogólnopolski (411/411) |
+| `samorzad2024` | Wybory samorządowe 7.04.2024 (rady gmin) | MSIP shapefile 2024 | CSV PKW (woj. małopolskie) (411/411) |
+| `prez2025_t1` | Wybory prezydenckie 18.05.2025 (I tura) | MSIP shapefile 2025 | CSV PKW, plik lokalny (412/412) |
+| `prez2025_t2` | Wybory prezydenckie 01.06.2025 (II tura) | MSIP shapefile 2025 | CSV PKW, plik lokalny (412/412) |
 
-**Nie udało się dodać:** wyborów prezydenckich 2025 — URL CSV na `wybory.gov.pl/prezydent2025/...` zwraca HTML zamiast pliku ZIP.
+**Uwaga dot. prez2025:** portal `prezydent2025.pkw.gov.pl` został przebudowany na SPA-archiwum — automatyczne pobranie CSV nie działa (każdy URL `/data/csv/*.zip` zwraca HTML). Pliki `protokoly_po_obwodach_utf8.csv` i `protokoly_po_obwodach_w_drugiej_turze_utf8.csv` zostały pobrane ręcznie z `https://prezydent2025.pkw.gov.pl/prezydent2025/pl/dane_w_arkuszach` i leżą w `data/raw/prez2025/`. ETL wspiera teraz `results.local_path` i `boundaries.local_path` w `config/elections.yaml` jako alternatywę dla pobierania przez URL.
 
 **Uruchomienie ETL:**
 ```bash
@@ -202,4 +204,4 @@ mapa_obwodow/
 
 ## Podsumowanie jednym zdaniem
 
-**Działa mapa Krakowa z wynikami dwóch wyborów i oficjalnymi granicami MSIP; rozpoczęto pilot automatycznego odtwarzania granic z opisu PKW (Bolesławiec ~85% przypisań), ale pełne skalowanie na Polskę wymaga dokończenia pilota, PRG zamiast OSM oraz warstw hybrydowych (gminy + generator + MSIP tam, gdzie jest).**
+**Działa mapa Krakowa z wynikami czterech wyborów (sejm2023, samorzad2024, prez2025 I i II tura) i oficjalnymi granicami MSIP, repo jest teraz w git bez hardcodowanych ścieżek; rozpoczęto pilot automatycznego odtwarzania granic z opisu PKW (Bolesławiec ~85% przypisań), ale pełne skalowanie na Polskę wymaga dokończenia pilota, PRG zamiast OSM oraz warstw hybrydowych (gminy + generator + MSIP tam, gdzie jest). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
