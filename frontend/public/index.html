@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mapa obwodów wyborczych — Kraków</title>
+    <title>Mapa obwodów wyborczych</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -16,7 +16,10 @@
     <div class="app">
       <aside class="sidebar">
         <h1>Mapa obwodów</h1>
-        <p id="city-name" class="subtitle">Kraków</p>
+        <p id="context-name" class="subtitle">Polska</p>
+        <button type="button" id="back-to-country" class="back-btn" style="display: none">
+          ← Powrót do mapy Polski
+        </button>
 
         <label for="election">Wybory</label>
         <select id="election"></select>

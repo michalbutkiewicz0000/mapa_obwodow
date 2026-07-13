@@ -65,10 +65,11 @@ def load_boundaries(election: dict, election_id: str) -> gpd.GeoDataFrame:
     return gdf
 
 
-def parse_sejm_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
+def parse_sejm_results(df: pd.DataFrame, teryt: str | None = None) -> pd.DataFrame:
     df["teryt"] = df["TERYT Gminy"].map(normalize_teryt)
     df["obwod"] = df["Nr komisji"].map(normalize_obwod)
-    df = df[df["teryt"] == teryt].copy()
+    if teryt is not None:
+        df = df[df["teryt"] == teryt].copy()
 
     party_cols = [
         col
@@ -88,7 +89,10 @@ def parse_sejm_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
         winner = max(results, key=results.get) if results else None
         rows.append(
             {
+                "teryt": row["teryt"],
                 "obwod": row["obwod"],
+                "eligible": eligible,
+                "voted": voted,
                 "frekwencja": round(voted / eligible, 4) if eligible else 0,
                 "glosy_wazne": valid,
                 "winner": winner,
@@ -99,10 +103,11 @@ def parse_sejm_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def parse_samorzad_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
+def parse_samorzad_results(df: pd.DataFrame, teryt: str | None = None) -> pd.DataFrame:
     df["teryt"] = df["Teryt Gminy"].map(normalize_teryt)
     df["obwod"] = df["Nr komisji"].map(normalize_obwod)
-    df = df[df["teryt"] == teryt].copy()
+    if teryt is not None:
+        df = df[df["teryt"] == teryt].copy()
 
     list_cols = [col for col in df.columns if str(col).startswith("Głosy na listę nr")]
     rows = []
@@ -127,7 +132,10 @@ def parse_samorzad_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
         winner = max(results, key=results.get) if results else None
         rows.append(
             {
+                "teryt": row["teryt"],
                 "obwod": row["obwod"],
+                "eligible": eligible,
+                "voted": voted,
                 "frekwencja": round(voted / eligible, 4) if eligible else 0,
                 "glosy_wazne": valid,
                 "winner": winner,
@@ -138,14 +146,15 @@ def parse_samorzad_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def parse_prez_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
+def parse_prez_results(df: pd.DataFrame, teryt: str | None = None) -> pd.DataFrame:
     teryt_col = next((col for col in df.columns if "TERYT" in col.upper() and "GMI" in col.upper()), None)
     obwod_col = next((col for col in df.columns if "NR" in col.upper() and "KOMIS" in col.upper()), "Nr komisji")
     if not teryt_col:
         raise ValueError("Nie znaleziono kolumny TERYT w wynikach prezydenckich")
     df["teryt"] = df[teryt_col].map(normalize_teryt)
     df["obwod"] = df[obwod_col].map(normalize_obwod)
-    df = df[df["teryt"] == teryt].copy()
+    if teryt is not None:
+        df = df[df["teryt"] == teryt].copy()
 
     eligible_col = next(
         (col for col in df.columns if "Liczba wyborców uprawnionych do głosowania" in str(col)), None
@@ -182,7 +191,10 @@ def parse_prez_results(df: pd.DataFrame, teryt: str) -> pd.DataFrame:
         winner = max(results, key=results.get) if results else None
         rows.append(
             {
+                "teryt": row["teryt"],
                 "obwod": row["obwod"],
+                "eligible": eligible,
+                "voted": voted,
                 "frekwencja": round(voted / eligible, 4) if eligible else 0,
                 "glosy_wazne": valid,
                 "winner": winner,
@@ -271,14 +283,19 @@ def build_election_dataset(election: dict, config: dict, metadata: pd.DataFrame)
     export = export.rename(columns={"results_json": "results"})
     export["frekwencja"] = export["frekwencja"].fillna(0)
     export["glosy_wazne"] = export["glosy_wazne"].fillna(0)
+    export["teryt"] = teryt
 
     geojson_path = PROCESSED_DIR / f"{election_id}.geojson"
     export.to_file(geojson_path, driver="GeoJSON")
     print(f"  Zapisano {geojson_path}")
 
     return {
-        "id": election_id,
-        "label": election["label"],
+        "name": config["city"]["name"],
+        "teryt": teryt,
+        "file": f"{election_id}.geojson",
+        "center": config["city"]["center"],
+        "zoom": config["city"]["zoom"],
+        "quality": "official",
         "matched": int(matched),
         "total": int(total),
     }
@@ -288,19 +305,20 @@ def main() -> None:
     ensure_dirs()
     config = load_config()
     metadata = load_metadata(config)
-    manifest = {
-        "city": config["city"]["name"],
-        "teryt": config["city"]["teryt"],
-        "center": config["city"]["center"],
-        "zoom": config["city"]["zoom"],
-        "elections": [],
-    }
+    manifest = {"elections": []}
 
     failed = []
     for election in config["elections"]:
         try:
-            info = build_election_dataset(election, config, metadata)
-            manifest["elections"].append(info)
+            area = build_election_dataset(election, config, metadata)
+            manifest["elections"].append(
+                {
+                    "id": election["id"],
+                    "label": election["label"],
+                    "country": None,
+                    "areas": [area],
+                }
+            )
         except Exception:
             print(f"Błąd dla {election['id']}:", file=sys.stderr)
             traceback.print_exc()

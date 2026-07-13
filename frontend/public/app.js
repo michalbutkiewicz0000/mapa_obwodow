@@ -12,6 +12,9 @@ let map;
 let layer;
 let manifest;
 let currentData = null;
+let currentElection = null; // wpis z manifest.elections
+let viewMode = "country"; // "country" | "area"
+let currentArea = null;
 
 function winnerColor(winner) {
   if (!winner) return "#cccccc";
@@ -103,28 +106,63 @@ function renderLegend(metric, data) {
   `;
 }
 
-function renderStats(electionInfo, data) {
+function renderStats(data, meta) {
   const stats = document.getElementById("stats");
   const withResults = data.features.filter((f) => f.properties.winner);
   const avgTurnout =
     withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) /
     (withResults.length || 1);
 
+  const coverageLabel = meta.unit === "gmina" ? "Gminy z wynikami" : "Pokrycie wynikami";
+  const countLabel = meta.unit === "gmina" ? "Gminy na mapie" : "Obwody na mapie";
+
   stats.innerHTML = `
-    <p>Pokrycie wynikami: ${electionInfo.matched}/${electionInfo.total}</p>
-    <p>Obwody na mapie: ${data.features.length}</p>
+    <p>${coverageLabel}: ${meta.matched}/${meta.total}</p>
+    <p>${countLabel}: ${data.features.length}</p>
     <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
   `;
 }
 
-function bindPopup(feature, layer) {
+function findAreaForTeryt(teryt) {
+  if (!currentElection || !teryt) return null;
+  return currentElection.areas.find((area) => area.teryt === teryt) || null;
+}
+
+function bindGminaPopup(feature, mapLayer) {
+  const props = feature.properties;
+  const results = parseResults(props.results);
+  const resultLines = topResults(results)
+    .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
+    .join("");
+  const area = findAreaForTeryt(props.teryt);
+
+  const popupNode = document.createElement("div");
+  popupNode.className = "popup";
+  popupNode.innerHTML = `
+    <h3>${props.gmina_nazwa ?? "Gmina"}</h3>
+    <p><strong>Frekwencja:</strong> ${formatPercent(props.frekwencja)}</p>
+    <p><strong>Głosy ważne:</strong> ${props.glosy_wazne ?? "—"}</p>
+    ${props.winner ? `<p><strong>Zwycięzca:</strong> ${props.winner}</p>` : ""}
+    <p><strong>Obwody:</strong> ${props.obwody ?? "—"}</p>
+    ${resultLines ? `<ul>${resultLines}</ul>` : ""}
+    ${area ? `<button type="button" class="show-area-btn">Pokaż obwody →</button>` : ""}
+  `;
+  if (area) {
+    popupNode.querySelector(".show-area-btn").addEventListener("click", () => {
+      loadArea(area);
+    });
+  }
+  mapLayer.bindPopup(popupNode);
+}
+
+function bindObwodPopup(feature, mapLayer) {
   const props = feature.properties;
   const results = parseResults(props.results);
   const resultLines = topResults(results)
     .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
     .join("");
 
-  layer.bindPopup(`
+  mapLayer.bindPopup(`
     <div class="popup">
       <h3>Obwód ${props.obwod ?? "?"}</h3>
       ${props.dzielnica ? `<p><em>${props.dzielnica}</em></p>` : ""}
@@ -137,34 +175,69 @@ function bindPopup(feature, layer) {
   `);
 }
 
-function drawMap(data, metric) {
+function drawMap(data, metric, onEachFeature) {
   if (layer) {
     map.removeLayer(layer);
   }
   layer = L.geoJSON(data, {
     style: (feature) => styleFeature(feature, metric),
-    onEachFeature: bindPopup,
+    onEachFeature,
   }).addTo(map);
   map.fitBounds(layer.getBounds(), { padding: [24, 24] });
 }
 
-async function loadElection(electionId) {
-  const metric = document.getElementById("metric").value;
-  const response = await fetch(`data/${electionId}.geojson`);
-  if (!response.ok) throw new Error("Brak danych GeoJSON");
-  currentData = await response.json();
-  const electionInfo = manifest.elections.find((item) => item.id === electionId);
-  renderStats(electionInfo, currentData);
+function currentMetric() {
+  return document.getElementById("metric").value;
+}
+
+function redraw() {
+  if (!currentData) return;
+  const metric = currentMetric();
   renderLegend(metric, currentData);
-  drawMap(currentData, metric);
+  drawMap(currentData, metric, viewMode === "country" ? bindGminaPopup : bindObwodPopup);
+}
+
+async function loadCountry() {
+  viewMode = "country";
+  currentArea = null;
+  document.getElementById("back-to-country").style.display = "none";
+  document.getElementById("context-name").textContent = "Polska";
+
+  const response = await fetch(`data/${currentElection.country.file}`);
+  if (!response.ok) throw new Error("Brak danych GeoJSON (gminy)");
+  currentData = await response.json();
+  renderStats(currentData, { ...currentElection.country, unit: "gmina" });
+  redraw();
+}
+
+async function loadArea(area) {
+  viewMode = "area";
+  currentArea = area;
+  document.getElementById("back-to-country").style.display = currentElection.country ? "block" : "none";
+  document.getElementById("context-name").textContent = area.name;
+
+  const response = await fetch(`data/${area.file}`);
+  if (!response.ok) throw new Error("Brak danych GeoJSON (obwody)");
+  currentData = await response.json();
+  renderStats(currentData, area);
+  redraw();
+  map.setView(area.center, area.zoom);
+}
+
+async function loadElection(electionId) {
+  currentElection = manifest.elections.find((item) => item.id === electionId);
+  if (currentElection.country) {
+    await loadCountry();
+  } else {
+    await loadArea(currentElection.areas[0]);
+  }
 }
 
 async function init() {
   const manifestResponse = await fetch("data/manifest.json");
   manifest = await manifestResponse.json();
-  document.getElementById("city-name").textContent = manifest.city;
 
-  map = L.map("map").setView(manifest.center, manifest.zoom);
+  map = L.map("map").setView([52.0, 19.3], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
@@ -178,12 +251,8 @@ async function init() {
   });
 
   select.addEventListener("change", () => loadElection(select.value));
-  document.getElementById("metric").addEventListener("change", () => {
-    if (currentData) {
-      renderLegend(document.getElementById("metric").value, currentData);
-      drawMap(currentData, document.getElementById("metric").value);
-    }
-  });
+  document.getElementById("metric").addEventListener("change", redraw);
+  document.getElementById("back-to-country").addEventListener("click", () => loadCountry());
 
   await loadElection(manifest.elections[0].id);
 }

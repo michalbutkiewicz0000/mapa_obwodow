@@ -13,7 +13,7 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 3. po wyborze widać **siatkę obwodów z nałożonymi wynikami** (frekwencja, wyniki list/kandydatów, zwycięzca w obwodzie),
 4. kliknięcie w obwód pokazuje **szczegóły** (numer, adres komisji, wyniki).
 
-**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). Dalszym celem jest **skalowanie na całą Polskę** (~31 500 obwodów), co wymaga innego podejścia do geometrii granic niż proste kopiowanie rozwiązania krakowskiego.
+**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). **Etap 3** dodał widok całej Polski (kartogram gmin) dla wyborów z pełnym pokryciem krajowym. Dalszym celem jest **skalowanie na poziom obwodów w całej Polsce** (~31 500 obwodów), co wymaga generatora granic (Etap 4) i kafelków wektorowych (Etap 5).
 
 Pełny wieloetapowy plan wdrożenia: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.
 
@@ -114,6 +114,20 @@ Pliki wyjściowe: `data/pilot/{boleslawiec,krakow}_{assigned.parquet,polygons.ge
 - Kraków ma nadal 114/454 obwodów bez punktu i sporo konfliktów (gęsta, powtarzalna nazwa ulic w różnych dzielnicach) — adresy OSM i luźniejsza semantyka `Opis granic` dla dużego miasta to główne źródło błędu, nie sam mechanizm dopasowania,
 - integracja wygenerowanych poligonów z frontendem (poza zakresem pilota).
 
+### 5. Widok całej Polski — kartogram gmin (Etap 3, działający)
+
+Pliki: [`scripts/build_gminy.py`](scripts/build_gminy.py) (nowy), zmiany w [`scripts/build_dataset.py`](scripts/build_dataset.py), [`frontend/public/app.js`](frontend/public/app.js)
+
+Co zostało zrobione:
+- **Parsery wyników przyjmują `teryt: str | None`** — bez filtra zwracają wszystkie obwody w kraju wraz z kolumną `teryt`, `eligible`, `voted` (potrzebne do agregacji ważonej frekwencji).
+- **`build_gminy.py`** — dla wyborów z pełnym pokryciem krajowym (`sejm2023`, `prez2025_t1`, `prez2025_t2`) agreguje wyniki per gmina (suma głosów, frekwencja ważona liczbą uprawnionych/głosujących, zwycięzca), łączy z granicami gmin i eksportuje `frontend/public/data/gminy_{id}.geojson`.
+  - **Wybory samorzad2024 pominięte w agregacji krajowej** — PKW publikuje dla nich tylko rady gmin >20 tys. mieszkańców per województwo, to nie jest komplet Polski; miejski widok Krakowa działa bez zmian.
+  - **Granice gmin**: `waszkiewiczja/GeoJSON-Polska-Wojewodztwa-Powiaty-Gminy` (domena publiczna, 2479 gmin, kod `JPT_KOD_JE` — pierwsze 6 znaków to TERYT gminy używany przez PKW), uproszczone (`simplify` tolerancja 0.003) do ~3-4 MB per plik wyborów.
+  - Zweryfikowano zgodność: suma głosów Krakowa z agregatu gminy (498 428) vs suma z poligonów obwodowych (494 619) — różnica to dokładnie 43 obwody istniejące w Excelu/CSV, których nie ma w shapefile MSIP (znany fakt, patrz pkt 3 niżej); zwycięzca (KO) zgodny w obu widokach.
+- **Manifest v2**: `{"elections": [{"id", "label", "country": {"file","unit","matched","total"} | null, "areas": [{"name","teryt","file","center","zoom","quality","matched","total"}]}]}`. `country: null` dla wyborów bez pełnego pokrycia (samorzad2024).
+- **Frontend — widok hybrydowy**: start pokazuje mapę Polski (gminy), popup gminy ma przycisk „Pokaż obwody →” (widoczny tylko dla gmin z dopasowanym `area.teryt`, dziś tylko Kraków), po kliknięciu ładuje się widok obwodowy z przyciskiem powrotu. Legenda trybu „zwycięzca” buduje się dynamicznie z danych — działa identycznie dla partii, kandydatów i lokalnych komitetów.
+- Zweryfikowano end-to-end w headless Chrome (CDP): render mapy Polski, klik w gminę → popup → „Pokaż obwody” → widok Krakowa → powrót, przełączanie wyborów (w tym samorzad2024 bez widoku krajowego), oba tryby kolorowania — bez błędów w konsoli.
+
 ---
 
 ## Kluczowe ustalenia techniczne
@@ -142,7 +156,8 @@ mapa_obwodow/
 │   ├── raw/                       # pobrane ZIP/shapefile/CSV (gitignore)
 │   └── pilot/                     # wyniki pilota (Bolesławiec + Kraków)
 ├── scripts/
-│   ├── build_dataset.py           # ETL: MSIP + PKW → GeoJSON (Kraków)
+│   ├── build_dataset.py           # ETL: MSIP + PKW → GeoJSON per miasto (Kraków)
+│   ├── build_gminy.py             # agregacja krajowa wyników per gmina
 │   ├── utils.py                   # pobieranie, normalizacja TERYT, CSV
 │   ├── parse_opis_granic.py       # parser Opis granic (pilot)
 │   ├── fetch_addresses_osm.py     # adresy z OSM (pilot)
@@ -150,7 +165,7 @@ mapa_obwodow/
 ├── frontend/
 │   └── public/                    # jedyna, statyczna wersja aplikacji
 │       ├── index.html, app.js, styles.css
-│       └── data/                  # manifest.json + *.geojson
+│       └── data/                  # manifest.json (v2) + gminy_*.geojson + *.geojson (miasta)
 ├── requirements.txt
 ├── README.md
 └── STAN_PROJEKTU.md               # ten plik
@@ -159,13 +174,6 @@ mapa_obwodow/
 ---
 
 ## Najbliższe kroki (rekomendowana kolejność — patrz pełny plan)
-
-### Etap 3 — wyniki ogólnopolskie i mapa gmin
-
-- Refaktor `build_dataset.py`: wyniki per `(teryt, obwod)` bez filtra gminy.
-- Agregacja per gmina (`scripts/build_gminy.py`), granice gmin z PRG/GUGiK.
-- Manifest v2 z sekcją `country` (gminy) i `areas` (miasta z poligonami obwodów).
-- Frontend: widok całej Polski + przycisk „Pokaż obwody” dla skonfigurowanych miast.
 
 ### Etap 4 — PRG zamiast OSM, generator dla wielu gmin
 
@@ -198,10 +206,10 @@ mapa_obwodow/
 | Metadane obwodów | Excel PKW (`data/metadata/obwody_glosowania_utf8.xlsx`) | używane |
 | Adresy w pilocie | OpenStreetMap (Overpass) | tymczasowo |
 | Adresy docelowo | PRG / Geoportal GUGiK | planowane |
-| Granice gmin (docelowo) | PRG / gotowe GeoJSON | planowane |
+| Granice gmin (widok krajowy) | [waszkiewiczja/GeoJSON-Polska-...-Gminy](https://github.com/waszkiewiczja/GeoJSON-Polska-Wojewodztwa-Powiaty-Gminy) (domena publiczna) | używane |
 
 ---
 
 ## Podsumowanie jednym zdaniem
 
-**Działa mapa Krakowa z wynikami czterech wyborów (sejm2023, samorzad2024, prez2025 I i II tura) i oficjalnymi granicami MSIP, repo jest w git bez hardcodowanych ścieżek; pilot generatora granic z opisu PKW ma teraz pełny raport z porównaniem przed/po poprawkach (Kraków: 53,9%→74,5% przypisanych adresów, IoU 0,172→0,569), ale pełne skalowanie na Polskę wymaga PRG zamiast OSM oraz warstw hybrydowych (gminy + generator + MSIP tam, gdzie jest). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
+**Aplikacja pokazuje teraz całą Polskę: mapa startuje jako kartogram 2479 gmin (frekwencja/zwycięzca) dla wyborów z pełnym pokryciem krajowym (sejm2023, prez2025 I/II tura), z Krakowa wciąż dostępny szczegółowy widok 411 obwodów z oficjalnymi granicami MSIP (przycisk „Pokaż obwody” w popupie gminy). Pilot generatora granic z opisu PKW ma pełny raport z poprawą po korektach parsera (Kraków: 53,9%→74,5% przypisanych adresów, IoU 0,172→0,569). Dalsze skalowanie na poziom obwodów w całym kraju wymaga PRG zamiast OSM (Etap 4) i kafelków wektorowych (Etap 5). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**

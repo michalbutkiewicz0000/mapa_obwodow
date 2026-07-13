@@ -65,6 +65,36 @@ select {
   color: #b00020;
 }
 
+.back-btn {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.back-btn:hover {
+  background: #f0f0f0;
+}
+
+.show-area-btn {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.show-area-btn:hover {
+  background: #555;
+}
+
 .legend {
   margin-top: 1.25rem;
 }

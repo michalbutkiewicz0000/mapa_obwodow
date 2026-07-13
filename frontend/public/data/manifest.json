@@ -1,35 +1,99 @@
 {
-  "city": "Kraków",
-  "teryt": "126101",
-  "center": [
-    50.0614,
-    19.9366
-  ],
-  "zoom": 12,
   "elections": [
     {
       "id": "sejm2023",
       "label": "Wybory parlamentarne 15.10.2023",
-      "matched": 411,
-      "total": 411
+      "country": {
+        "file": "gminy_sejm2023.geojson",
+        "unit": "gmina",
+        "matched": 2476,
+        "total": 2479
+      },
+      "areas": [
+        {
+          "name": "Kraków",
+          "teryt": "126101",
+          "file": "sejm2023.geojson",
+          "center": [
+            50.0614,
+            19.9366
+          ],
+          "zoom": 12,
+          "quality": "official",
+          "matched": 411,
+          "total": 411
+        }
+      ]
     },
     {
       "id": "samorzad2024",
       "label": "Wybory samorządowe 7.04.2024 (rady gmin)",
-      "matched": 411,
-      "total": 411
+      "country": null,
+      "areas": [
+        {
+          "name": "Kraków",
+          "teryt": "126101",
+          "file": "samorzad2024.geojson",
+          "center": [
+            50.0614,
+            19.9366
+          ],
+          "zoom": 12,
+          "quality": "official",
+          "matched": 411,
+          "total": 411
+        }
+      ]
     },
     {
       "id": "prez2025_t1",
       "label": "Wybory prezydenckie 18.05.2025 (I tura)",
-      "matched": 412,
-      "total": 412
+      "country": {
+        "file": "gminy_prez2025_t1.geojson",
+        "unit": "gmina",
+        "matched": 2478,
+        "total": 2479
+      },
+      "areas": [
+        {
+          "name": "Kraków",
+          "teryt": "126101",
+          "file": "prez2025_t1.geojson",
+          "center": [
+            50.0614,
+            19.9366
+          ],
+          "zoom": 12,
+          "quality": "official",
+          "matched": 412,
+          "total": 412
+        }
+      ]
     },
     {
       "id": "prez2025_t2",
       "label": "Wybory prezydenckie 01.06.2025 (II tura)",
-      "matched": 412,
-      "total": 412
+      "country": {
+        "file": "gminy_prez2025_t2.geojson",
+        "unit": "gmina",
+        "matched": 2478,
+        "total": 2479
+      },
+      "areas": [
+        {
+          "name": "Kraków",
+          "teryt": "126101",
+          "file": "prez2025_t2.geojson",
+          "center": [
+            50.0614,
+            19.9366
+          ],
+          "zoom": 12,
+          "quality": "official",
+          "matched": 412,
+          "total": 412
+        }
+      ]
     }
   ]
 }
