@@ -1,0 +1,23 @@
+{
+  "city": "Kraków",
+  "teryt": "126101",
+  "center": [
+    50.0614,
+    19.9366
+  ],
+  "zoom": 12,
+  "elections": [
+    {
+      "id": "sejm2023",
+      "label": "Wybory parlamentarne 15.10.2023",
+      "matched": 411,
+      "total": 411
+    },
+    {
+      "id": "samorzad2024",
+      "label": "Wybory samorządowe 7.04.2024 (rady gmin)",
+      "matched": 411,
+      "total": 411
+    }
+  ]
+}

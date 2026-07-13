@@ -1,0 +1,26 @@
+city:
+  name: Kraków
+  teryt: "126101"
+  center: [50.0614, 19.9366]
+  zoom: 12
+  metadata_xlsx: data/metadata/obwody_glosowania_utf8.xlsx
+
+elections:
+  - id: sejm2023
+    label: Wybory parlamentarne 15.10.2023
+    boundaries:
+      url: https://msip.um.krakow.pl/Dane/2023_10_15_Wybory_Parlamentarne.zip
+      layer_suffix: Obwody
+    results:
+      url: https://wybory.gov.pl/sejmsenat2023/data/csv/wyniki_gl_na_listy_po_obwodach_sejm_csv.zip
+      type: sejm_lists
+
+  - id: samorzad2024
+    label: Wybory samorządowe 7.04.2024 (rady gmin)
+    boundaries:
+      url: https://msip.um.krakow.pl/Dane/2024_04_07_Wybory_Samorzadowe.zip
+      layer_suffix: Obwody
+    results:
+      url: https://wybory.gov.pl/samorzad2024/data/csv/protokoly_po_obwodach_rady_gmin_powyzej_20k_csv.zip
+      type: samorzad_lists
+      voivodeship_file: wojewodztwo_małopolskie_utf8.csv
