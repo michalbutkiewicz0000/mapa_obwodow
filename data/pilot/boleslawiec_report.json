@@ -1,0 +1,13 @@
+{
+  "gmina": "m. Bolesławiec",
+  "teryt": "20101",
+  "addresses_total": 6405,
+  "addresses_assigned": 5762,
+  "assignment_rate": 0.8996,
+  "conflicts": 99,
+  "resolved_by_specificity": 122,
+  "unmatched_no_rule": 544,
+  "obwody_with_points": 21,
+  "obwody_expected": 24,
+  "obwody_missing": 3
+}

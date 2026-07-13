@@ -1,0 +1,20 @@
+{
+  "gmina": "m. Kraków",
+  "teryt": "126101",
+  "addresses_total": 95057,
+  "addresses_assigned": 70847,
+  "assignment_rate": 0.7453,
+  "conflicts": 10820,
+  "resolved_by_specificity": 10552,
+  "unmatched_no_rule": 13390,
+  "obwody_with_points": 340,
+  "obwody_expected": 454,
+  "obwody_missing": 114,
+  "validation": {
+    "polygons_compared": 329,
+    "mean_iou": 0.569,
+    "median_iou": 0.5962,
+    "address_point_accuracy": 0.9659,
+    "address_points_checked": 58502
+  }
+}

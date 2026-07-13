@@ -40,6 +40,14 @@ class StreetRule:
             return True
         return any(rng.contains(number) for rng in self.ranges)
 
+    def specificity(self) -> int:
+        """Im wyższa wartość, tym bardziej precyzyjna reguła (używane przy rozstrzyganiu konfliktów)."""
+        if self.ranges:
+            return 2
+        if self.parity != "all":
+            return 1
+        return 0
+
 
 @dataclass
 class ObwodRules:
@@ -52,11 +60,20 @@ class ObwodRules:
     villages: list[str] = field(default_factory=list)
 
     def matches(self, street: str | None, number: int | None, village: str | None = None) -> bool:
+        return self.match_specificity(street, number, village) is not None
+
+    def match_specificity(
+        self, street: str | None, number: int | None, village: str | None = None
+    ) -> int | None:
+        """Zwraca specyficzność najlepiej dopasowanej reguły, albo None jeśli brak dopasowania."""
         if self.villages and village:
-            return any(villages_equal(v, village) for v in self.villages)
+            if any(villages_equal(v, village) for v in self.villages):
+                return 3
+            return None
         if self.streets and street:
-            return any(rule.matches(street, number) for rule in self.streets)
-        return False
+            specs = [rule.specificity() for rule in self.streets if rule.matches(street, number)]
+            return max(specs) if specs else None
+        return None
 
 
 def normalize_text(value: str) -> str:
@@ -74,7 +91,15 @@ def streets_equal(a: str, b: str) -> bool:
     na, nb = normalize_text(a), normalize_text(b)
     if na == nb:
         return True
-    return na in nb or nb in na
+    # Dopasowanie po całych słowach (nie po dowolnym podciągu znaków) — luźny substring
+    # dawał masowe fałszywe trafienia w gęstej sieci ulic Krakowa (np. "Kolejowa" w
+    # "Nowa Kolejowa" ma inny numer administracyjny).
+    ta, tb = na.split(), nb.split()
+    if not ta or not tb:
+        return False
+    shorter, longer = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    n = len(shorter)
+    return any(longer[i : i + n] == shorter for i in range(len(longer) - n + 1))
 
 
 def villages_equal(a: str, b: str) -> bool:
@@ -198,13 +223,35 @@ def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
     return rules
 
 
+def resolve_obwod(
+    rules_list: list[ObwodRules],
+    street: str | None,
+    number: int | None,
+    village: str | None = None,
+) -> tuple[int | None, int]:
+    """Zwraca (obwod albo None, liczba surowych dopasowań przed rozstrzygnięciem konfliktu).
+
+    Gdy adres pasuje do wielu obwodów, wygrywa ten z najbardziej specyficzną regułą
+    (zakres numerów > parzystość > cała ulica / miejscowość). Jeśli po tym kryterium
+    nadal jest remis, zwracane jest None (prawdziwa niejednoznaczność).
+    """
+    scored = [
+        (rules.obwod, rules.match_specificity(street, number, village)) for rules in rules_list
+    ]
+    scored = [(obwod, spec) for obwod, spec in scored if spec is not None]
+    if not scored:
+        return None, 0
+    max_spec = max(spec for _, spec in scored)
+    top = [obwod for obwod, spec in scored if spec == max_spec]
+    winner = top[0] if len(top) == 1 else None
+    return winner, len(scored)
+
+
 def assign_obwod(
     rules_list: list[ObwodRules],
     street: str | None,
     number: int | None,
     village: str | None = None,
 ) -> int | None:
-    matches = [rules.obwod for rules in rules_list if rules.matches(street, number, village)]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    winner, _ = resolve_obwod(rules_list, street, number, village)
+    return winner

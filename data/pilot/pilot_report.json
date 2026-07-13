@@ -1,0 +1,75 @@
+{
+  "gminy": [
+    {
+      "gmina": "m. Bolesławiec",
+      "teryt": "20101",
+      "addresses_total": 6405,
+      "addresses_assigned": 5762,
+      "assignment_rate": 0.8996,
+      "conflicts": 99,
+      "resolved_by_specificity": 122,
+      "unmatched_no_rule": 544,
+      "obwody_with_points": 21,
+      "obwody_expected": 24,
+      "obwody_missing": 3
+    },
+    {
+      "gmina": "m. Kraków",
+      "teryt": "126101",
+      "addresses_total": 95057,
+      "addresses_assigned": 70847,
+      "assignment_rate": 0.7453,
+      "conflicts": 10820,
+      "resolved_by_specificity": 10552,
+      "unmatched_no_rule": 13390,
+      "obwody_with_points": 340,
+      "obwody_expected": 454,
+      "obwody_missing": 114,
+      "validation": {
+        "polygons_compared": 329,
+        "mean_iou": 0.569,
+        "median_iou": 0.5962,
+        "address_point_accuracy": 0.9659,
+        "address_points_checked": 58502
+      }
+    }
+  ],
+  "comparison_before_after_etap_2_4": {
+    "m. Bolesławiec": {
+      "before_etap_2_4": {
+        "addresses_total": 6405,
+        "addresses_assigned": 5472,
+        "assignment_rate": 0.8543,
+        "conflicts": 389,
+        "obwody_missing": 4
+      },
+      "after_etap_2_4": {
+        "addresses_total": 6405,
+        "addresses_assigned": 5762,
+        "assignment_rate": 0.8996,
+        "conflicts": 99,
+        "obwody_missing": 3
+      }
+    },
+    "m. Kraków": {
+      "before_etap_2_4": {
+        "addresses_total": 95057,
+        "addresses_assigned": 51187,
+        "assignment_rate": 0.5385,
+        "conflicts": 33479,
+        "obwody_missing": 140,
+        "mean_iou": 0.172,
+        "address_point_accuracy": 0.9709
+      },
+      "after_etap_2_4": {
+        "addresses_total": 95057,
+        "addresses_assigned": 70847,
+        "assignment_rate": 0.7453,
+        "conflicts": 10820,
+        "obwody_missing": 114,
+        "mean_iou": 0.569,
+        "address_point_accuracy": 0.9659
+      }
+    }
+  }
+}

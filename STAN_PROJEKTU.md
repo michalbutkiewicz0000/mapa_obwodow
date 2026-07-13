@@ -13,7 +13,9 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 3. po wyborze widać **siatkę obwodów z nałożonymi wynikami** (frekwencja, wyniki list/kandydatów, zwycięzca w obwodzie),
 4. kliknięcie w obwód pokazuje **szczegóły** (numer, adres komisji, wyniki).
 
-**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). Dalszym celem jest **skalowanie na całą Polskę** (~31 500 obwodów), co wymaga innego podejścia do geometrii granic niż proste kopiowanie rozwiązania krakowskiego.
+**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). Dalszym celem jest **skalowanie na całą Polskę** (~31 500 obwodów), co wymaga innego podejścia do geometrii granic niż proste kopiowanie rozwiązania krakowskiego.
+
+Pełny wieloetapowy plan wdrożenia: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.
 
 ---
 
@@ -21,8 +23,8 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 
 ### 1. Analiza danych źródłowych
 
-- Przeanalizowano plik PKW [`obwody_glosowania_utf8.xlsx`](/Users/michalbutkiewicz/Downloads/obwody_glosowania_utf8.xlsx):
-  - **31 497 obwodów** w całej Polsce,
+- Przeanalizowano plik PKW [`obwody_glosowania_utf8.xlsx`](data/metadata/obwody_glosowania_utf8.xlsx) (teraz w repo, `data/metadata/`):
+  - **31 497 obwodów** w całej Polsce,
   - **454 obwody** dla `m. Kraków`,
   - kolumna `Opis granic` wypełniona dla **100%** rekordów (0 pustych),
   - brak współrzędnych / poligonów — tylko **tekstowy opis granic** (ulice, numery, parzystość, miejscowości).
@@ -33,8 +35,8 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 Pliki: [`scripts/build_dataset.py`](scripts/build_dataset.py), [`scripts/utils.py`](scripts/utils.py), [`config/elections.yaml`](config/elections.yaml)
 
 Pipeline:
-1. Pobiera **shapefile obwodów** z MSIP Kraków (ZIP per wybory),
-2. Pobiera **wyniki wyborów** z PKW (`wybory.gov.pl/.../data/csv/..._csv.zip`),
+1. Pobiera **shapefile obwodów** z MSIP Kraków (ZIP per wybory) albo z lokalnego pliku (`boundaries.local_path`),
+2. Pobiera **wyniki wyborów** z PKW (`wybory.gov.pl/.../data/csv/..._csv.zip`) albo z lokalnego CSV (`results.local_path`),
 3. Łączy dane po kluczu `teryt + nr_obwodu`,
 4. Wzbogaca metadanymi z Excela PKW (adres komisji, liczba wyborców, opis granic),
 5. Eksportuje **GeoJSON** do [`frontend/public/data/`](frontend/public/data/).
@@ -61,10 +63,11 @@ python scripts/build_dataset.py
 Pliki: [`frontend/public/index.html`](frontend/public/index.html), [`frontend/public/app.js`](frontend/public/app.js), [`frontend/public/styles.css`](frontend/public/styles.css)
 
 Funkcje:
-- mapa Leaflet (kafelki OpenStreetMap),
+- mapa Leaflet (kafelki OpenStreetMap), wyśrodkowana wg `manifest.center`/`manifest.zoom`,
 - **selektor wyborów** (dropdown),
-- **kolorowanie**: frekwencja lub zwycięzca/lista,
+- **kolorowanie**: frekwencja lub zwycięzca/lista/kandydat,
 - **popup** po kliknięciu w obwód (wyniki, frekwencja, adres komisji),
+- **legenda budowana dynamicznie** z unikalnych zwycięzców w danych (działa też dla kandydatów prezydenckich, nie tylko partii),
 - legenda i statystyki (pokrycie wynikami, średnia frekwencja).
 
 **Uruchomienie:**
@@ -74,9 +77,9 @@ python3 -m http.server 8080
 # → http://localhost:8080
 ```
 
-Przygotowano też szkielet wersji React (`frontend/src/`), ale **nie jest wymagany do działania** — brak npm w środowisku, dlatego produkcyjnie używana jest wersja statyczna HTML/JS.
+Szkielet wersji React (`frontend/src/`) został usunięty — nigdy nie był budowany (brak npm w środowisku), dublował `app.js`. Produkcyjnie używana jest statyczna wersja HTML/JS bez zależności od Node.
 
-### 4. Pilot generatora granic z „Opis granic” (rozpoczęty, niedokończony)
+### 4. Pilot generatora granic z „Opis granic” (ukończony pierwszy przebieg, wyniki bazowe)
 
 Pliki: [`scripts/parse_opis_granic.py`](scripts/parse_opis_granic.py), [`scripts/fetch_addresses_osm.py`](scripts/fetch_addresses_osm.py), [`scripts/run_pilot.py`](scripts/run_pilot.py)
 
@@ -87,38 +90,45 @@ Co zostało zrobione:
   - listy ulic,
   - parzyste / nieparzyste numery,
   - zakresy numerów (`1–13`, `od 2 do 20`, `do końca`),
-  - miejscowości wiejskie (pojedyncze nazwy wsi).
-- **Pobieranie adresów z OpenStreetMap** (Overpass API) w zadanym bbox.
-- **Przypisywanie adresów do obwodów** na podstawie reguł z parsera.
-- **Budowa wstępnych poligonów** (bufor + dissolve punktów przypisanych do obwodu).
+  - miejscowości wiejskie (pojedyncze nazwy wsi),
+  - dopasowanie nazw ulic po całych słowach (nie po dowolnym podciągu znaków) — poprzedni luźny substring dawał masę fałszywych trafień w gęstej sieci ulic Krakowa,
+  - rozstrzyganie konfliktów wg specyficzności reguły (zakres numerów > parzystość > cała ulica/miejscowość) zamiast odrzucania każdego adresu z >1 dopasowaniem.
+- **Pobieranie adresów z OpenStreetMap** (Overpass API) w zadanym bbox, z cache.
+- **Przypisywanie adresów do obwodów** równolegle (`ProcessPoolExecutor`, do 10 procesów) na podstawie reguł z parsera.
+- **Budowa poligonów przez prawdziwy diagram Voronoi** (`shapely.voronoi_polygons`) przycięty do granicy gminy (dla Krakowa: dissolve shapefile MSIP), dissolve po obwodzie — zamiast wcześniejszego bufora punktowego.
+- **Skrypt odporny na przerwania**: raport per gmina zapisywany od razu po jej przetworzeniu, walidacja MSIP w osobnym `try/except` (jej porażka nie kasuje reszty raportu).
 
-**Wynik pilota dla Bolesławca** (`m. Bolesławiec`, 24 obwody, TERYT 20101):
+**Wynik pilota — pełny raport w `data/pilot/pilot_report.json`, z porównaniem przed/po poprawkach parsera:**
 
-| Metryka | Wartość |
-|---------|---------|
-| Adresy OSM w bbox | 6 405 |
-| Adresy przypisane do obwodu | 5 472 (**85,4%**) |
-| Obwody z co najmniej 1 punktem | **20 / 24** |
-| Pliki wyjściowe | `data/pilot/boleslawiec_assigned.parquet`, `data/pilot/boleslawiec_polygons.geojson` |
+| Metryka | Bolesławiec przed | Bolesławiec po | Kraków przed | Kraków po |
+|---|---|---|---|---|
+| Adresy przypisane | 85,4% (5472/6405) | **90,0% (5762/6405)** | 53,9% (51187/95057) | **74,5% (70847/95057)** |
+| Konflikty (>1 dopasowanie) | 389 | **99** | 33 479 | **10 820** |
+| Obwody brakujące | 4/24 | **3/24** | 140/454 | **114/454** |
+| Średnie IoU vs MSIP | — | — | 0,172 | **0,569** |
+| Trafność punktów vs MSIP | — | — | 97,1% | 96,6% |
 
-**Nie dokończono:**
-- walidacji **Krakowa vs shapefile MSIP** (IoU poligonów, trafność punktów) — skrypt się zatrzymał / został przerwany przed tym etapem,
-- pliku `data/pilot/pilot_report.json` (raport końcowy pilota),
-- integracji wygenerowanych poligonów z frontendem.
+Pliki wyjściowe: `data/pilot/{boleslawiec,krakow}_{assigned.parquet,polygons.geojson,report.json}`, `data/pilot/pilot_report.json`.
+
+**Wciąż otwarte (Etap 4 planu — PRG zamiast OSM):**
+- Kraków ma nadal 114/454 obwodów bez punktu i sporo konfliktów (gęsta, powtarzalna nazwa ulic w różnych dzielnicach) — adresy OSM i luźniejsza semantyka `Opis granic` dla dużego miasta to główne źródło błędu, nie sam mechanizm dopasowania,
+- integracja wygenerowanych poligonów z frontendem (poza zakresem pilota).
 
 ---
 
 ## Kluczowe ustalenia techniczne
 
-1. **Wyniki wyborów ogólnopolskie są dostępne** — CSV PKW ma ~31 498 wierszy (Sejm 2023); parser w [`build_dataset.py`](scripts/build_dataset.py) filtruje dziś tylko jedną gminę, ale dane źródłowe obejmują całą Polskę.
+1. **Wyniki wyborów ogólnopolskie są dostępne** — CSV PKW ma ~31 498 wierszy (Sejm 2023); parser w [`build_dataset.py`](scripts/build_dataset.py) filtruje dziś tylko jedną gminę, ale dane źródłowe obejmują całą Polskę.
 
 2. **Poligony obwodów nie są ogólnopolskie** — MSIP Kraków publikuje shapefile per wybory; nie ma jednego centralnego repozytorium GeoJSON dla ~31k obwodów.
 
-3. **Excel vs MSIP Kraków** — Excel ma 454 obwody dla Krakowa, shapefile MSIP ma 411 (dla wyborów 2023/2024). Numery 1–411 się pokrywają; 43 nowsze obwody (412–454) nie mają jeszcze poligonów w MSIP dla starszych wyborów. Granice i numeracja **muszą być parowane z konkretnymi wyborami**.
+3. **Excel vs MSIP Kraków** — Excel ma 454 obwody dla Krakowa, shapefile MSIP ma 411 (dla wyborów 2023/2024) i 412 (dla 2025). Numery się w większości pokrywają; nowsze obwody nie mają jeszcze poligonów w MSIP dla starszych wyborów. Granice i numeracja **muszą być parowane z konkretnymi wyborami**.
 
 4. **Skala frontendu** — 411 obwodów ≈ 1,4 MB GeoJSON; ~31k poligonów wymagałoby kafelkowania wektorowego (PMTiles), nie jednego pliku w przeglądarce.
 
-5. **Pilot używa OSM, nie PRG** — docelowo rzetelniejsze są oficjalne **punkty adresowe PRG** (GUGiK); OSM posłużył jako szybki substytut w pilocie.
+5. **Pilot używa OSM, nie PRG** — docelowo rzetelniejsze są oficjalne **punkty adresowe PRG** (GUGiK); OSM posłużył jako szybki substytut w pilocie i pozostaje głównym ograniczeniem jakości dla dużych miast.
+
+6. **Maszyna deweloperska ma rdzenie heterogeniczne** (Apple M4: 4 wydajne + 6 efektywnych) — zrównoleglanie CPU-bound pracy skaluje się słabiej niż liniowo; przy pilotowaniu większych obliczeń warto to uwzględnić.
 
 ---
 
@@ -127,20 +137,20 @@ Co zostało zrobione:
 ```
 mapa_obwodow/
 ├── config/elections.yaml          # konfiguracja Krakowa i wyborów
+├── data/
+│   ├── metadata/                  # Excel PKW (w repo)
+│   ├── raw/                       # pobrane ZIP/shapefile/CSV (gitignore)
+│   └── pilot/                     # wyniki pilota (Bolesławiec + Kraków)
 ├── scripts/
 │   ├── build_dataset.py           # ETL: MSIP + PKW → GeoJSON (Kraków)
 │   ├── utils.py                   # pobieranie, normalizacja TERYT, CSV
 │   ├── parse_opis_granic.py       # parser Opis granic (pilot)
 │   ├── fetch_addresses_osm.py     # adresy z OSM (pilot)
 │   └── run_pilot.py               # uruchomienie pilota Bolesławiec + Kraków
-├── data/
-│   ├── raw/                       # pobrane ZIP/shapefile (gitignore częściowo)
-│   └── pilot/                     # wyniki pilota (Bolesławiec)
 ├── frontend/
-│   ├── public/                    # działająca aplikacja + dane
-│   │   ├── index.html, app.js, styles.css
-│   │   └── data/                  # manifest.json, sejm2023.geojson, samorzad2024.geojson
-│   └── src/                       # szkielet React (opcjonalny)
+│   └── public/                    # jedyna, statyczna wersja aplikacji
+│       ├── index.html, app.js, styles.css
+│       └── data/                  # manifest.json + *.geojson
 ├── requirements.txt
 ├── README.md
 └── STAN_PROJEKTU.md               # ten plik
@@ -148,33 +158,23 @@ mapa_obwodow/
 
 ---
 
-## Najbliższe kroki (rekomendowana kolejność)
+## Najbliższe kroki (rekomendowana kolejność — patrz pełny plan)
 
-### Krótkoterminowo (dokończenie tego, co już jest)
+### Etap 3 — wyniki ogólnopolskie i mapa gmin
 
-1. **Dokończyć pilot** — uruchomić [`scripts/run_pilot.py`](scripts/run_pilot.py) do końca:
-   - walidacja Krakowa względem MSIP (IoU poligonów, % poprawnie przypisanych adresów),
-   - zapis `data/pilot/pilot_report.json`,
-   - analiza 4 brakujących obwodów w Bolesławcu i ~15% nieprzypisanych adresów (błędy parsera vs luki w OSM).
+- Refaktor `build_dataset.py`: wyniki per `(teryt, obwod)` bez filtra gminy.
+- Agregacja per gmina (`scripts/build_gminy.py`), granice gmin z PRG/GUGiK.
+- Manifest v2 z sekcją `country` (gminy) i `areas` (miasta z poligonami obwodów).
+- Frontend: widok całej Polski + przycisk „Pokaż obwody” dla skonfigurowanych miast.
 
-2. **Poprawić parser** na podstawie walidacji — szczególnie złożone opisy krakowskie (`Kraków-Śródzieście: ...`, zakresy typu `Dajwór parzyste od 2 do 20`).
+### Etap 4 — PRG zamiast OSM, generator dla wielu gmin
 
-### Średnioterminowo (skalowanie)
+- `scripts/fetch_addresses_prg.py` — oficjalne punkty adresowe GUGiK zamiast OSM.
+- `scripts/generate_boundaries.py` — batch generator z flagą jakości (`official`/`generated`/`approximate`).
 
-3. **Wyniki ogólnopolskie bez filtra gminy** — refaktor `build_dataset.py`: wyniki per `(teryt, obwod)` dla całej Polski; mapa gmin (agregacja + PRG GeoJSON) jako widok kraju.
+### Etap 5 — skala ogólnopolska (PMTiles + MapLibre GL)
 
-4. **Zastąpić OSM punktami PRG** w generatorze granic — oficjalne punkty adresowe z Geoportalu; cache per gmina.
-
-5. **Model hybrydowy na mapie:**
-   - zoom out → gminy z wynikami zagregowanymi,
-   - zoom in / wybór miasta → poligony z MSIP (Kraków) lub wygenerowane (generator),
-   - oznaczenie jakości granic (`official` / `generated` / `approximate`).
-
-### Długoterminowo
-
-6. **Kafelki wektorowe (PMTiles)** — gdy generator obejmie więcej gmin; 31k poligonów nie da się serwować jako jeden GeoJSON.
-
-7. **Rejestr miast ze shapefile** — stopniowe dodawanie oficjalnych źródeł (Wrocław, Warszawa, …) nadpisujących generator.
+### Etap 6 — publikacja (GitHub Pages) i szlif UX
 
 ---
 
@@ -183,9 +183,8 @@ mapa_obwodow/
 - mapy obwodów dla całej Polski z poligonami,
 - integracji pilota z frontendem,
 - geokodowania / punktów PRG ogólnopolskich,
-- wyborów prezydenckich 2025,
-- wersji React uruchamianej przez npm,
-- commitów git (repozytorium nie było inicjalizowane w trakcie prac).
+- wersji React (usunięta — nie była budowana, dublowała `app.js`),
+- publicznego deploymentu (GitHub Pages — planowane w Etapie 6).
 
 ---
 
@@ -195,7 +194,8 @@ mapa_obwodow/
 |-----|--------|--------|
 | Granice obwodów (Kraków) | [MSIP Kraków](https://msip.krakow.pl/dataset/2684) | używane |
 | Wyniki wyborów | [wybory.gov.pl](https://wybory.gov.pl/) → Dane w arkuszach (CSV ZIP) | używane |
-| Metadane obwodów | Excel PKW (`obwody_glosowania_utf8.xlsx`) | używane |
+| Wyniki prez2025 | `prezydent2025.pkw.gov.pl/pl/dane_w_arkuszach` (ręczne pobranie) | używane |
+| Metadane obwodów | Excel PKW (`data/metadata/obwody_glosowania_utf8.xlsx`) | używane |
 | Adresy w pilocie | OpenStreetMap (Overpass) | tymczasowo |
 | Adresy docelowo | PRG / Geoportal GUGiK | planowane |
 | Granice gmin (docelowo) | PRG / gotowe GeoJSON | planowane |
@@ -204,4 +204,4 @@ mapa_obwodow/
 
 ## Podsumowanie jednym zdaniem
 
-**Działa mapa Krakowa z wynikami czterech wyborów (sejm2023, samorzad2024, prez2025 I i II tura) i oficjalnymi granicami MSIP, repo jest teraz w git bez hardcodowanych ścieżek; rozpoczęto pilot automatycznego odtwarzania granic z opisu PKW (Bolesławiec ~85% przypisań), ale pełne skalowanie na Polskę wymaga dokończenia pilota, PRG zamiast OSM oraz warstw hybrydowych (gminy + generator + MSIP tam, gdzie jest). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
+**Działa mapa Krakowa z wynikami czterech wyborów (sejm2023, samorzad2024, prez2025 I i II tura) i oficjalnymi granicami MSIP, repo jest w git bez hardcodowanych ścieżek; pilot generatora granic z opisu PKW ma teraz pełny raport z porównaniem przed/po poprawkach (Kraków: 53,9%→74,5% przypisanych adresów, IoU 0,172→0,569), ale pełne skalowanie na Polskę wymaga PRG zamiast OSM oraz warstw hybrydowych (gminy + generator + MSIP tam, gdzie jest). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
