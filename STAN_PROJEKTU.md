@@ -202,6 +202,30 @@ Co zostało zrobione:
 - brak automatycznego triggera dla `test.yml`/`deploy-pages.yml` przy zmianach w `data/`/`scripts/` poza `frontend/public` — budowa danych pozostaje w pełni lokalna/ręczna, zgodnie z planem,
 - limit rozmiaru repo (100 MB/plik, ~1 GB miękki limit) nieprzetestowany dla pełnopolskiego `obwody.pmtiles` — plan B (Cloudflare R2 + URL w manifeście) pozostaje niezrealizowany, bo dziś kafelki mają tylko 0,37 MB.
 
+### 9. Warszawa i geometria obwodów per wybory (Etap 7-8, działający)
+
+Po publikacji zgłoszono dwa problemy: Warszawa nie istniała w żadnych wyborach, a jedna geometria obwodów była współdzielona między wyborami mimo że obwody się zmieniają w czasie.
+
+**`scripts/download_all_prg.py` (Etap 7.0)** — nocny, wznawialny downloader adresów PRG dla wszystkich ~2477 gmin (dziś w cache tylko te potrzebne do 21 miast + Warszawy). Pomija gminy z istniejącym plikiem `data/raw/prg/{teryt}.parquet` (dane PRG się nie zmieniają w czasie), retry z backoffem, zapis nieudanych terytów do `_failed.json`, log postępu z ETA. Uruchamiany ręcznie w tle (`nohup ... &`), bezpieczny do przerwania w dowolnym momencie.
+
+**Naprawa zero-padding TERYT (Etap 7.1)** — `build_gminy.load_national_results()` nie dopełniał TERYT zerami wiodącymi dla województw jednocyfrowych, co dawało 0 dopasowanych wyników dla 6 miast (Hrubieszów, Biłgoraj, Świebodzice, Krasnystaw, Nowa Sól, Oława) mimo poprawnie wygenerowanej geometrii. Przy okazji wykryto i naprawiono analogiczny bug insert-only w `generate_boundaries.update_manifest()` — nadpisywał istniejące wpisy tylko przy dodawaniu nowych terytów, więc naprawa TERYT nie miała żadnego widocznego efektu w `manifest.json` bez tej drugiej poprawki.
+
+**Warszawa w widoku krajowym (Etap 7.2)** — PKW koduje Warszawę jako 18 osobnych „gmin" (dzielnic, TERYT `146502`-`146519`), podczas gdy granice gmin i adresy PRG używają jednego kodu całego miasta (`146501`). `aggregate_by_gmina()` mapuje teraz dzielnice na `146501` przed agregacją.
+
+**Generator Warszawy (Etap 7.3)** — Warszawa dostała pełną geometrię obwodów (805 poligonów, jeden obszar „Warszawa" w manifeście, klucze obwodów per dzielnica). Wymagało to naprawy trzech niezależnych bugów w parserze `parse_opis_granic.py`:
+- rozpoznawanie `Typ obszaru == "dzielnica w m.st. Warszawa"` (bez tego cały opis trafiał do `villages` jako fałszywa nazwa wsi),
+- **bug parzystości obecny od początku, dotyczący wszystkich miast**: sprawdzanie `"parzyst" in słowo.lower()` dawało `True` również dla `"nieparzyste"` (zawiera ten podciąg), więc `(nieparzyste)` było odczytywane jako parzyste — naprawione na sprawdzanie prefiksu `"nie"`,
+- `normalize_text` nie usuwał pełnych słów `"ulica"/"aleja"/"trakt"` itd. używanych przez PRG w adresach Warszawy (rejestr PKW używa skrótów `"ul."/"al."`) — bez tego żaden adres warszawski się nie dopasowywał,
+- dedykowany parser `parse_warszawa_description()` dla unikalnego formatu Warszawy `"ul. X: specyfikacja numerów"` (zamiast prostej listy ulic jak w innych miastach) — obsługuje `cała`, pojedyncze numery, zakresy, zakresy z parzystością, klauzule łączone `i`/`oraz`, numery łączone ukośnikiem (`1/3`).
+
+Wynik: 81,1% adresów dopasowanych (102533/126398), 723/805 obwodów z punktami, jakość `approximate` — porównywalne z Krakowem (87,6%) i pozostałymi miastami.
+
+**Kafelki PMTiles per wybory (Etap 8.1-8.2)** — `build_tiles.py` buduje teraz osobny `obwody_{election_id}.pmtiles` dla każdych wyborów (zamiast jednego wspólnego pliku), źródłem geometrii są wyłącznie `areas[].file` z manifestu. Frontend (`ensureObwodyLayer()` w `app.js`) podmienia źródło/warstwy `obwody` przy każdej zmianie wyborów zamiast trzymać jedno stałe źródło. Efekt uboczny: samorzad2024 ma teraz w kafelkach tylko Kraków (jedyne wybory z `areas`), więc znikają szare poligony pozostałych miast bez wyników.
+
+**Testy (Etap 8.4)** — dodano regresję dla agregacji dzielnic Warszawy, dla parsera (`nieparzyste` vs `parzyste`, format dwukropkowy, prefiksy PRG), oraz dla spójności manifestu (`test_tiles_exist_per_election`, `test_no_stale_shared_pmtiles`, `test_every_area_has_some_matched_results` — łapie klasę buga zero-padding).
+
+**Świadomie pominięte:** rejestr obwodów prez2025 (Etap 8.3, wymaga ręcznego pobrania CSV z portalu prezydent2025 — jeśli nie zostanie zrobione, prez2025 zostaje na geometrii z rejestru 2024, z drobnymi niedopasowaniami w `matched/total`).
+
 ---
 
 ## Kluczowe ustalenia techniczne
