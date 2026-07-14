@@ -45,7 +45,28 @@ def test_results_json_exists_per_election(manifest):
         assert path.exists(), f"Brak {path} — uruchom scripts/build_tiles.py"
 
 
-def test_obwody_pmtiles_exists():
-    if not MANIFEST_PATH.exists():
-        pytest.skip("manifest.json nie istnieje")
-    assert (DATA_DIR / "obwody.pmtiles").exists()
+def test_tiles_exist_per_election(manifest):
+    # Geometria obwodów jest per wybory (Etap 8) — nie ma już jednego wspólnego
+    # obwody.pmtiles, tylko obwody_{election_id}.pmtiles, zgodnie z manifest["tiles"].
+    for election in manifest["elections"]:
+        tiles = election.get("tiles")
+        if tiles is None:
+            continue
+        path = DATA_DIR / tiles
+        assert path.exists(), f"Brak {path} dla wyborów {election['id']} — uruchom scripts/build_tiles.py"
+
+
+def test_no_stale_shared_pmtiles():
+    # Pozostałość z Etapu 5 — jeśli istnieje, build_tiles.py nie został uruchomiony
+    # po migracji na kafelki per wybory (Etap 8).
+    assert not (DATA_DIR / "obwody.pmtiles").exists()
+
+
+def test_every_area_has_some_matched_results(manifest):
+    # Łapie klasę buga z Etapu 7: obszar klikalny na mapie, ale z 0 dopasowanych
+    # wyników we wszystkich obwodach (np. przez niezgodność formatu TERYT).
+    for election in manifest["elections"]:
+        for area in election["areas"]:
+            assert area["matched"] > 0, (
+                f"{area['name']} ({election['id']}): 0/{area['total']} dopasowanych wyników"
+            )

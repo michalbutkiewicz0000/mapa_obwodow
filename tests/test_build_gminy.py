@@ -65,3 +65,38 @@ def test_aggregate_by_gmina_drops_rows_without_teryt():
     )
     aggregated = aggregate_by_gmina(results)
     assert aggregated.empty
+
+
+def test_aggregate_by_gmina_merges_warszawa_dzielnice():
+    # PKW liczy Warszawę jako 18 osobnych "gmin" (dzielnic) — powinny się
+    # zsumować pod jednym kodem całego miasta (146501), zgodnym z granicami
+    # gmin i punktami adresowymi PRG.
+    results = pd.DataFrame(
+        [
+            {
+                "teryt": "146502",  # Bemowo
+                "obwod": 1,
+                "eligible": 1000,
+                "voted": 700,
+                "glosy_wazne": 690,
+                "winner": "KO",
+                "results": {"KO": 400, "PiS": 290},
+            },
+            {
+                "teryt": "146510",  # Śródmieście
+                "obwod": 1,
+                "eligible": 2000,
+                "voted": 1800,
+                "glosy_wazne": 1780,
+                "winner": "KO",
+                "results": {"KO": 1200, "PiS": 580},
+            },
+        ]
+    )
+    aggregated = aggregate_by_gmina(results)
+    assert len(aggregated) == 1
+    row = aggregated.iloc[0]
+    assert row["teryt"] == "146501"
+    assert row["obwody"] == 2
+    assert row["glosy_wazne"] == 690 + 1780
+    assert row["results"] == {"KO": 1600, "PiS": 870}
