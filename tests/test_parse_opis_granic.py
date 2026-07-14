@@ -195,6 +195,20 @@ def test_parse_opis_granic_miasto_streets():
     assert "Krótka" in names
 
 
+def test_parse_city_description_semicolon_separated_streets():
+    # ~5% wpisów "miasto" w kraju rozdziela ulice średnikiem zamiast
+    # przecinkiem (np. m. Skarżysko-Kamienna) — bez normalizacji cała lista
+    # trafiała jako jeden, nigdy niepasujący "segment" (8,9% -> 84,5%
+    # dopasowanych adresów po naprawie).
+    _, _, streets = parse_city_description(
+        "ulice: Bazaltowa; Borówkowa; 1 Maja od nr 134 do końca"
+    )
+    names = [s.name for s in streets]
+    assert names == ["Bazaltowa", "Borówkowa", "1 Maja"]
+    maja = next(s for s in streets if s.name == "1 Maja")
+    assert any(r.end is None for r in maja.ranges)
+
+
 def test_parse_opis_granic_warszawa_dzielnica_parses_as_streets():
     # Rejestr PKW koduje 18 dzielnic Warszawy z Typ obszaru "dzielnica w m.st.
     # Warszawa" zamiast "miasto" — bez tej gałęzi cały opis trafiał do

@@ -223,7 +223,11 @@ def parse_city_description(body: str) -> tuple[str | None, str | None, list[Stre
     streets: list[StreetRule] = []
     pending_street: StreetRule | None = None
 
-    for segment in split_segments(body):
+    # Część rejestru (~5% wpisów "miasto" w kraju) rozdziela ulice średnikiem
+    # zamiast przecinkiem — bez normalizacji cała lista trafiała jako jeden,
+    # nigdy niepasujący "segment" (znalezione przy próbie wygenerowania granic
+    # dla całej Polski, np. m. Skarżysko-Kamienna: 8,9% dopasowanych adresów).
+    for segment in split_segments(body.replace(";", ",")):
         ranges, parity, street_name = parse_range_fragment(segment)
         if street_name and not ranges and parity == "all":
             pending_street = StreetRule(name=street_name)
