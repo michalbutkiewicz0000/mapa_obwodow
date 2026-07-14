@@ -4,22 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>O danych — Mapa obwodów wyborczych</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
     <style>
       .about-page {
-        max-width: 720px;
+        max-width: 760px;
         margin: 0 auto;
-        padding: 2rem 1.5rem 4rem;
-        font-family: "Segoe UI", system-ui, sans-serif;
-        color: #1a1a1a;
-        line-height: 1.6;
+        padding: 2.5rem 1.5rem 4rem;
+        line-height: 1.65;
+        color: var(--text);
       }
       .about-page h1 {
-        font-size: 1.6rem;
+        font-size: 1.7rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
       .about-page h2 {
         font-size: 1.15rem;
-        margin-top: 2rem;
+        font-weight: 600;
+        margin-top: 2.25rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+      }
+      .about-page p {
+        color: var(--accent-weak);
       }
       .about-page table {
         width: 100%;
@@ -30,12 +43,29 @@
       .about-page th,
       .about-page td {
         text-align: left;
-        padding: 0.4rem 0.6rem;
-        border-bottom: 1px solid #e5e5e5;
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .about-page th {
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+      }
+      .about-page a {
+        color: var(--accent);
+        font-weight: 500;
       }
       .about-page a.back {
         display: inline-block;
         margin-bottom: 1.5rem;
+        font-weight: 600;
+      }
+      .about-page code {
+        background: var(--surface-2);
+        padding: 0.1rem 0.35rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.88em;
       }
       .badge-legend {
         display: flex;

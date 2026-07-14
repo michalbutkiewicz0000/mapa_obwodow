@@ -4,43 +4,82 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mapa obwodów wyborczych</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app">
+    <div class="app" id="app">
       <aside class="sidebar">
-        <h1>Mapa obwodów</h1>
-        <p id="context-name" class="subtitle">Polska</p>
-        <button type="button" id="back-to-country" class="back-btn" style="display: none">
-          ← Powrót do mapy Polski
-        </button>
+        <header class="sidebar-header">
+          <div class="wordmark">
+            <span class="wordmark-title">Mapa obwodów</span>
+            <span class="wordmark-sub">wyborczych w Polsce</span>
+          </div>
+          <button type="button" id="filters-toggle" class="filters-toggle" aria-expanded="true">
+            Filtry
+          </button>
+        </header>
 
-        <label for="search">Szukaj gminy / miasta</label>
-        <input type="text" id="search" list="search-list" placeholder="np. Kraków, Przasnysz…" autocomplete="off" />
-        <datalist id="search-list"></datalist>
+        <div class="sidebar-body" id="sidebar-body">
+          <p id="context-name" class="context">Polska</p>
+          <button type="button" id="back-to-country" class="back-btn" style="display: none">
+            ← Powrót do mapy Polski
+          </button>
 
-        <label for="election">Wybory</label>
-        <select id="election"></select>
+          <section class="card controls">
+            <div class="field">
+              <label for="search">Szukaj gminy / miasta</label>
+              <input
+                type="text"
+                id="search"
+                list="search-list"
+                placeholder="np. Kraków, Przasnysz…"
+                autocomplete="off"
+              />
+              <datalist id="search-list"></datalist>
+            </div>
 
-        <label for="level">Poziom szczegółowości</label>
-        <select id="level">
-          <option value="wojewodztwa">Województwa</option>
-          <option value="powiaty">Powiaty</option>
-          <option value="gminy" selected>Gminy</option>
-          <option value="obwody">Obwody</option>
-        </select>
+            <div class="field">
+              <label for="election">Wybory</label>
+              <div class="select-wrap">
+                <select id="election"></select>
+              </div>
+            </div>
 
-        <label for="metric">Kolorowanie</label>
-        <select id="metric">
-          <option value="frekwencja">Frekwencja</option>
-          <option value="winner">Zwycięzca / lista</option>
-        </select>
+            <div class="field">
+              <label for="level">Poziom szczegółowości</label>
+              <div class="select-wrap">
+                <select id="level">
+                  <option value="wojewodztwa">Województwa</option>
+                  <option value="powiaty">Powiaty</option>
+                  <option value="gminy" selected>Gminy</option>
+                  <option value="obwody">Obwody</option>
+                </select>
+              </div>
+            </div>
 
-        <div id="stats" class="stats"></div>
-        <div id="legend" class="legend"></div>
+            <div class="field">
+              <label for="metric">Kolorowanie</label>
+              <div class="select-wrap">
+                <select id="metric">
+                  <option value="frekwencja">Frekwencja</option>
+                  <option value="winner">Zwycięzca / lista</option>
+                </select>
+              </div>
+            </div>
+          </section>
 
-        <a href="o-danych.html" class="about-link">O danych i metodologii →</a>
+          <section id="stats" class="card stats"></section>
+          <section id="legend" class="card legend"></section>
+
+          <a href="o-danych.html" class="about-link">O danych i metodologii →</a>
+        </div>
       </aside>
       <main id="map" class="map"></main>
     </div>

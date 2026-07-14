@@ -50,22 +50,31 @@ function ensureObwodyLayer(tilesFile) {
     url: `pmtiles://data/${tilesFile}`,
     promoteId: "key",
   });
-  map.addLayer({
-    id: "obwody-fill",
-    type: "fill",
-    source: "obwody",
-    "source-layer": "obwody",
-    layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
-    paint: { "fill-color": "#cccccc", "fill-opacity": 0.7 },
-  });
-  map.addLayer({
-    id: "obwody-line",
-    type: "line",
-    source: "obwody",
-    "source-layer": "obwody",
-    layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
-    paint: { "line-color": "#333333", "line-width": 1 },
-  });
+  map.addLayer(
+    {
+      id: "obwody-fill",
+      type: "fill",
+      source: "obwody",
+      "source-layer": "obwody",
+      layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
+      paint: { "fill-color": "#cccccc", "fill-opacity": 0.8 },
+    },
+    "carto-labels",
+  );
+  map.addLayer(
+    {
+      id: "obwody-line",
+      type: "line",
+      source: "obwody",
+      "source-layer": "obwody",
+      layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
+      paint: {
+        "line-color": ["case", ["boolean", ["feature-state", "hover"], false], "#0f172a", "#94a3b8"],
+        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.5, 0.7],
+      },
+    },
+    "carto-labels",
+  );
   currentTilesFile = tilesFile;
 }
 
@@ -95,10 +104,27 @@ function winnerColor(winner) {
   return PARTY_COLORS[winner] || colorFromString(winner);
 }
 
+// Sekwencyjna rampa frekwencji (ColorBrewer YlGnBu) — bezpieczna dla daltonistów,
+// jasny (niska) → ciemny (wysoka). Interpolujemy w RGB między 6 przystankami; ta
+// sama funkcja zasila frekwencjaColorStops() (warstwy mapy) i legendę CSS.
+const TURNOUT_RAMP = [
+  [255, 255, 204],
+  [199, 233, 180],
+  [127, 205, 187],
+  [65, 182, 196],
+  [44, 127, 184],
+  [37, 52, 148],
+];
+
 function frekwencjaColor(value) {
   const clamped = Math.max(0, Math.min(1, value || 0));
-  const hue = 210 - clamped * 210;
-  return `hsl(${hue}, 70%, 45%)`;
+  const scaled = clamped * (TURNOUT_RAMP.length - 1);
+  const i = Math.floor(scaled);
+  const t = scaled - i;
+  const a = TURNOUT_RAMP[i];
+  const b = TURNOUT_RAMP[Math.min(i + 1, TURNOUT_RAMP.length - 1)];
+  const mix = (x, y) => Math.round(x + (y - x) * t);
+  return `rgb(${mix(a[0], b[0])}, ${mix(a[1], b[1])}, ${mix(a[2], b[2])})`;
 }
 
 function colorFromString(input) {
@@ -128,6 +154,30 @@ function topResults(results, limit = 5) {
   return Object.entries(results)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit);
+}
+
+function winnerChip(winner) {
+  if (!winner) return "";
+  return `<span class="winner-chip"><span class="dot" style="background:${winnerColor(winner)}"></span>${winner}</span>`;
+}
+
+// Wyniki jako poziome słupki — szerokość ∝ udział w najlepszym wyniku, kolor
+// z tej samej palety co warstwa "zwycięzca". Reużywa topResults()/winnerColor().
+function resultBars(results, limit = 5) {
+  const entries = topResults(results, limit);
+  if (!entries.length) return "";
+  const max = Math.max(...entries.map(([, votes]) => votes)) || 1;
+  const rows = entries
+    .map(([name, votes]) => {
+      const pct = Math.round((votes / max) * 100);
+      return `<div class="result-bar">
+          <span class="result-bar-label">${name}</span>
+          <span class="result-bar-value">${votes}</span>
+          <span class="result-bar-track"><span class="result-bar-fill" style="width:${pct}%; background:${winnerColor(name)}"></span></span>
+        </div>`;
+    })
+    .join("");
+  return `<div class="result-bars">${rows}</div>`;
 }
 
 // ---------- wyszukiwarka gmin/miast ----------
@@ -242,8 +292,15 @@ function updateContext() {
   backBtn.style.display = "block";
 }
 
+function statRow(label, value, big = false) {
+  return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value${
+    big ? " big" : ""
+  }">${value}</span></div>`;
+}
+
 function renderStats() {
   const stats = document.getElementById("stats");
+  stats.classList.remove("is-loading");
   let html = "";
 
   if (currentLevel === "obwody") {
@@ -261,12 +318,11 @@ function renderStats() {
         withData += 1;
       }
     });
-    html = `
-      <p><strong>Obwody (na ekranie)</strong></p>
-      <p>Widoczne: ${seen.size}</p>
-      <p>Z wynikami: ${withData}</p>
-      <p>Średnia frekwencja: ${formatPercent(withData ? sumTurnout / withData : null)}</p>
-    `;
+    html =
+      `<div class="card-title">Obwody na ekranie</div>` +
+      statRow("Widoczne", seen.size) +
+      statRow("Z wynikami", withData) +
+      statRow("Śr. frekwencja", formatPercent(withData ? sumTurnout / withData : null), true);
   } else {
     const countryInfo = currentElection.country ? currentElection.country[currentLevel] : null;
     const features = levelData[currentLevel]?.features || [];
@@ -274,11 +330,9 @@ function renderStats() {
     const avgTurnout =
       withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) / (withResults.length || 1);
     html = countryInfo
-      ? `
-      <p><strong>Widok: ${LEVEL_LABELS[currentLevel]}</strong></p>
-      <p>Z wynikami: ${countryInfo.matched}/${countryInfo.total}</p>
-      <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
-    `
+      ? `<div class="card-title">Widok: ${LEVEL_LABELS[currentLevel]}</div>` +
+        statRow("Z wynikami", `${countryInfo.matched}/${countryInfo.total}`) +
+        statRow("Śr. frekwencja", formatPercent(avgTurnout), true)
       : `<p>Brak danych krajowych na poziomie „${LEVEL_LABELS[currentLevel]}" dla tych wyborów.</p>`;
   }
 
@@ -299,9 +353,6 @@ const LEVEL_UNIT_LABELS = { wojewodztwa: "Województwo", powiaty: "Powiat", gmin
 function showLevelPopup(feature, lngLat, level) {
   const props = feature.properties;
   const results = parseResults(props.results);
-  const resultLines = topResults(results)
-    .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
-    .join("");
   // Poligon obszaru z obwodami (jeśli jest) ma sens jako drill-down tylko z
   // poziomu gmin — teryt powiatu/województwa nie odpowiada żadnemu areas[].teryt.
   const area = level === "gminy" ? findAreaForTeryt(props.teryt) : null;
@@ -310,11 +361,11 @@ function showLevelPopup(feature, lngLat, level) {
   node.className = "popup";
   node.innerHTML = `
     <h3>${props.nazwa ?? LEVEL_UNIT_LABELS[level]}</h3>
+    ${props.winner ? winnerChip(props.winner) : ""}
     <p><strong>Frekwencja:</strong> ${formatPercent(props.frekwencja)}</p>
     <p><strong>Głosy ważne:</strong> ${props.glosy_wazne ?? "—"}</p>
-    ${props.winner ? `<p><strong>Zwycięzca:</strong> ${props.winner}</p>` : ""}
     <p><strong>Obwody:</strong> ${props.obwody ?? "—"}</p>
-    ${resultLines ? `<ul>${resultLines}</ul>` : ""}
+    ${resultBars(results)}
     ${area ? `<button type="button" class="show-area-btn">Pokaż obwody →</button>` : ""}
     ${area ? qualityBadge(area.quality) : ""}
   `;
@@ -336,19 +387,16 @@ function showObwodPopup(feature, lngLat) {
   const props = feature.properties;
   const result = resultsIndex[props.key] || {};
   const results = parseResults(result.results);
-  const resultLines = topResults(results)
-    .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
-    .join("");
 
   const html = `
     <div class="popup">
       <h3>Obwód ${props.obwod ?? "?"}</h3>
       ${result.dzielnica ? `<p><em>${result.dzielnica}</em></p>` : ""}
+      ${result.winner ? winnerChip(result.winner) : ""}
       <p><strong>Frekwencja:</strong> ${formatPercent(result.frekwencja)}</p>
       <p><strong>Głosy ważne:</strong> ${result.glosy_wazne ?? "—"}</p>
-      ${result.winner ? `<p><strong>Zwycięzca:</strong> ${result.winner}</p>` : ""}
       ${result.komisja ? `<p><strong>Komisja:</strong> ${result.komisja}</p>` : ""}
-      ${resultLines ? `<ul>${resultLines}</ul>` : ""}
+      ${resultBars(results)}
       ${
         result.wyborcy || result.opis_granic
           ? `<details class="popup-details">
@@ -462,6 +510,27 @@ function applyResultsFeatureState() {
   });
 }
 
+// Podświetlenie obrysu pod kursorem przez feature-state "hover". Działa zarówno
+// dla źródeł GeoJSON (poziomy krajowe, generateId) jak i wektorowych (obwody,
+// promoteId "key") — dla obwodów podajemy sourceLayer.
+function wireHover(fillLayerId, source, sourceLayer) {
+  let hoveredId = null;
+  const clear = () => {
+    if (hoveredId === null) return;
+    map.setFeatureState({ source, sourceLayer, id: hoveredId }, { hover: false });
+    hoveredId = null;
+  };
+  map.on("mousemove", fillLayerId, (e) => {
+    if (!e.features.length) return;
+    const id = e.features[0].id;
+    if (id === hoveredId) return;
+    clear();
+    hoveredId = id;
+    map.setFeatureState({ source, sourceLayer, id }, { hover: true });
+  });
+  map.on("mouseleave", fillLayerId, clear);
+}
+
 let loadToken = 0;
 
 function emptyFeatureCollection() {
@@ -471,6 +540,10 @@ function emptyFeatureCollection() {
 async function loadElection(electionId, options = {}) {
   const token = ++loadToken;
   const election = manifest.elections.find((item) => item.id === electionId);
+
+  const statsEl = document.getElementById("stats");
+  statsEl.classList.add("is-loading");
+  statsEl.innerHTML = "<p>Ładowanie danych…</p>";
 
   const [levelGeojsons, results] = await Promise.all([
     Promise.all(
@@ -546,19 +619,37 @@ async function init() {
   const protocol = new pmtiles.Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
 
+  // Stonowany, jasny podkład CARTO Positron. Etykiety miejscowości są osobną
+  // warstwą "carto-labels" NAD kartogramem — wszystkie warstwy danych wstawiamy
+  // pod nią (beforeId: "carto-labels"), żeby nazwy miast pozostały czytelne mimo
+  // wypełnienia obwodów/gmin.
+  const cartoAttribution =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
+    '&copy; <a href="https://carto.com/attributions">CARTO</a>';
+  const cartoTiles = (style) =>
+    ["a", "b", "c", "d"].map((s) => `https://${s}.basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}.png`);
+
   map = new maplibregl.Map({
     container: "map",
     style: {
       version: 8,
       sources: {
-        osm: {
+        "carto-base": {
           type: "raster",
-          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tiles: cartoTiles("light_nolabels"),
           tileSize: 256,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          attribution: cartoAttribution,
+        },
+        "carto-labels": {
+          type: "raster",
+          tiles: cartoTiles("light_only_labels"),
+          tileSize: 256,
         },
       },
-      layers: [{ id: "osm", type: "raster", source: "osm" }],
+      layers: [
+        { id: "carto-base", type: "raster", source: "carto-base" },
+        { id: "carto-labels", type: "raster", source: "carto-labels" },
+      ],
     },
     center: hash.center || [19.3, 52.0],
     zoom: hash.zoom ?? 6,
@@ -574,26 +665,38 @@ async function init() {
   // "obwody" jest tworzona dynamicznie w ensureObwodyLayer(), bo jej geometria
   // jest per wybory (patrz loadElection).
   COUNTRY_LEVELS.forEach((level) => {
-    map.addSource(level, { type: "geojson", data: emptyFeatureCollection() });
-    map.addLayer({
-      id: `${level}-fill`,
-      type: "fill",
-      source: level,
-      layout: { visibility: level === currentLevel ? "visible" : "none" },
-      paint: { "fill-color": "#cccccc", "fill-opacity": 0.65 },
-    });
-    map.addLayer({
-      id: `${level}-line`,
-      type: "line",
-      source: level,
-      layout: { visibility: level === currentLevel ? "visible" : "none" },
-      paint: { "line-color": "#333333", "line-width": 1 },
-    });
+    // generateId: true nadaje featom stabilne id, bez których feature-state
+    // (podświetlenie na hover) nie działa dla źródeł GeoJSON.
+    map.addSource(level, { type: "geojson", data: emptyFeatureCollection(), generateId: true });
+    map.addLayer(
+      {
+        id: `${level}-fill`,
+        type: "fill",
+        source: level,
+        layout: { visibility: level === currentLevel ? "visible" : "none" },
+        paint: { "fill-color": "#cccccc", "fill-opacity": 0.8 },
+      },
+      "carto-labels",
+    );
+    map.addLayer(
+      {
+        id: `${level}-line`,
+        type: "line",
+        source: level,
+        layout: { visibility: level === currentLevel ? "visible" : "none" },
+        paint: {
+          "line-color": ["case", ["boolean", ["feature-state", "hover"], false], "#0f172a", "#94a3b8"],
+          "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.5, 0.6],
+        },
+      },
+      "carto-labels",
+    );
     map.on("click", `${level}-fill`, (e) => {
       if (e.features.length) showLevelPopup(e.features[0], e.lngLat, level);
     });
     map.on("mouseenter", `${level}-fill`, () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", `${level}-fill`, () => (map.getCanvas().style.cursor = ""));
+    wireHover(`${level}-fill`, level);
   });
 
   map.on("click", "obwody-fill", (e) => {
@@ -601,6 +704,7 @@ async function init() {
   });
   map.on("mouseenter", "obwody-fill", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "obwody-fill", () => (map.getCanvas().style.cursor = ""));
+  wireHover("obwody-fill", "obwody", "obwody");
   // "idle" (nie tylko zoomend/moveend) — kafelki wektorowe ładują się async,
   // więc zaraz po zoomend mogą jeszcze nie być wyrenderowane.
   map.on("idle", () => {
@@ -611,6 +715,12 @@ async function init() {
   document.getElementById("back-to-country").addEventListener("click", () => {
     closePopup();
     map.flyTo({ center: [19.3, 52.0], zoom: 6 });
+  });
+
+  const filtersToggle = document.getElementById("filters-toggle");
+  filtersToggle.addEventListener("click", () => {
+    const collapsed = document.getElementById("app").classList.toggle("filters-collapsed");
+    filtersToggle.setAttribute("aria-expanded", String(!collapsed));
   });
 
   const select = document.getElementById("election");
