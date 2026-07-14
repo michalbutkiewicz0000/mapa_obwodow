@@ -1,7 +1,16 @@
+# .venv: venv jest platformo-zależny (ścieżki bezwzględne, binarki) i nie działa
+# po skopiowaniu na inną maszynę — odtwórz przez `python -m venv .venv &&
+# .venv/bin/pip install -r requirements.txt`.
 .venv/
 __pycache__/
 *.pyc
-data/raw/
+# data/raw/ jest teraz commitowane (input pipeline'u: PRG, CSV wyników, granice),
+# żeby dało się uruchomić generację na innej maszynie. Wyjątki poniżej.
+# data/raw/prg1/ to redundantna kopia data/raw/prg/ (ten sam zestaw) — kod używa
+# prg jako cache, więc prg1 pomijamy.
+data/raw/prg1/
+# data/tiles/ to regenerowalne półprodukty build_tiles.py (pliki *_source.geojson
+# po ~131 MB przekraczają limit 100 MB/plik GitHuba) — odtwarza je build_tiles.py.
 data/tiles/
 .DS_Store
 .idea/
