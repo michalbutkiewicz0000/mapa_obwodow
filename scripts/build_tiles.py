@@ -82,6 +82,11 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
     # zakrywają wypełnienia) — rozwiązane po stronie klienta: szerokość obrysu obwodu
     # zależna od zoomu (0 przy oddaleniu, widoczna przy zbliżeniu). Patrz app.js
     # ensureObwodyLayer, "line-width".
+    # --detect-shared-borders: bez tego tippecanoe upraszcza granicę każdego
+    # poligonu NIEZALEŻNIE, więc wspólne krawędzie sąsiednich obwodów rozjeżdżają
+    # się i zostają białe szczeliny — w gęstym kaflu (Warszawa+Łódź) przy z6 dawało
+    # to prostokątny "rozsyp". Ta flaga upraszcza wspólne granice identycznie, więc
+    # kartogram jest solidny na każdym zoomie (zweryfikowane zrzutem ekranu).
     subprocess.run(
         [
             "tippecanoe",
@@ -89,6 +94,7 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
             "-l", "obwody",
             "-zg",
             "--force",
+            "--detect-shared-borders",
             "--simplification=10",
             "--no-tile-compression",
             str(source_path),
