@@ -6,7 +6,7 @@
       "country": {
         "file": "gminy_sejm2023.geojson",
         "unit": "gmina",
-        "matched": 2476,
+        "matched": 2477,
         "total": 2479
       },
       "areas": [
@@ -46,7 +46,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 12,
           "total": 12
         },
         {
@@ -59,7 +59,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -163,7 +163,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 15,
           "total": 15
         },
         {
@@ -202,7 +202,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -215,7 +215,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {
@@ -241,7 +241,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {
@@ -311,7 +311,7 @@
       "country": {
         "file": "gminy_prez2025_t1.geojson",
         "unit": "gmina",
-        "matched": 2478,
+        "matched": 2479,
         "total": 2479
       },
       "areas": [
@@ -351,7 +351,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 12,
           "total": 12
         },
         {
@@ -364,7 +364,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -468,7 +468,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 15,
           "total": 15
         },
         {
@@ -507,7 +507,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -520,7 +520,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {
@@ -546,7 +546,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {
@@ -596,7 +596,7 @@
       "country": {
         "file": "gminy_prez2025_t2.geojson",
         "unit": "gmina",
-        "matched": 2478,
+        "matched": 2479,
         "total": 2479
       },
       "areas": [
@@ -636,7 +636,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 12,
           "total": 12
         },
         {
@@ -649,7 +649,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -753,7 +753,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 15,
           "total": 15
         },
         {
@@ -792,7 +792,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 13,
           "total": 13
         },
         {
@@ -805,7 +805,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {
@@ -831,7 +831,7 @@
           ],
           "zoom": 13,
           "quality": "generated",
-          "matched": 0,
+          "matched": 16,
           "total": 16
         },
         {

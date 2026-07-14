@@ -24,6 +24,11 @@ SIMPLIFY_TOLERANCE = 0.003  # ~2.8 MB dla 2479 gmin, wystarczające dla widoku k
 # więc pomijamy tu agregację krajową dla tych wyborów (patrz STAN_PROJEKTU.md).
 COUNTRY_ELECTIONS = {"sejm2023", "prez2025_t1", "prez2025_t2"}
 
+# PKW liczy Warszawę jako 18 osobnych "gmin" (dzielnic, TERYT 146502-146519),
+# ale granice gmin i punkty adresowe PRG znają tylko jeden kod całego miasta
+# (146501) — bez tego mapowania poligon Warszawy zostaje bez wyników.
+WARSZAWA_DZIELNICE_TO_MIASTO = {f"1465{n:02d}": "146501" for n in range(2, 20)}
+
 
 def load_gmina_boundaries(simplify: float | None = SIMPLIFY_TOLERANCE) -> gpd.GeoDataFrame:
     """Granice gmin. `simplify=None` zwraca pełną geometrię (do precyzyjnego
@@ -56,15 +61,24 @@ def load_national_results(election: dict) -> pd.DataFrame:
         df = read_csv_from_zip(zip_path, inner_name=inner_name)
 
     if result_type == "sejm_lists":
-        return parse_sejm_results(df, teryt=None)
-    if result_type == "prez_candidates":
-        return parse_prez_results(df, teryt=None)
-    raise ValueError(f"Agregacja krajowa nieobsługiwana dla typu wyników: {result_type}")
+        results = parse_sejm_results(df, teryt=None)
+    elif result_type == "prez_candidates":
+        results = parse_prez_results(df, teryt=None)
+    else:
+        raise ValueError(f"Agregacja krajowa nieobsługiwana dla typu wyników: {result_type}")
+
+    # PKW zapisuje TERYT bez wiodącego zera dla jednocyfrowych województw
+    # (np. "60401" zamiast "060401") — dopełniamy tu, w jednym miejscu, żeby
+    # każdy odbiorca (aggregate_by_gmina, generate_boundaries.export_election_areas)
+    # dostawał już znormalizowany, 6-cyfrowy klucz zgodny z resztą pipeline'u.
+    results["teryt"] = results["teryt"].str.zfill(6)
+    return results
 
 
 def aggregate_by_gmina(results: pd.DataFrame) -> pd.DataFrame:
     results = results.dropna(subset=["teryt"]).copy()
     results["teryt"] = results["teryt"].str.zfill(6)
+    results["teryt"] = results["teryt"].map(lambda t: WARSZAWA_DZIELNICE_TO_MIASTO.get(t, t))
 
     rows = []
     for teryt, group in results.groupby("teryt"):

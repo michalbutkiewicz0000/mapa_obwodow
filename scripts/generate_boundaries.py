@@ -40,6 +40,13 @@ CACHE_DIR = ROOT / "data" / "raw" / "prg"
 QUALITY_GENERATED_MIN_RATE = 0.90
 QUALITY_APPROXIMATE_MIN_RATE = 0.70
 
+# Warszawa jest w rejestrze PKW zapisana jako 18 osobnych "gmin" (dzielnic,
+# TERYT 146502-146519) z niezależną numeracją obwodów w jednej wspólnej puli
+# (numery unikalne w skali całego miasta — zweryfikowane na danych). Granice
+# gmin i PRG znają tylko jeden kod całego miasta: 146501.
+WARSZAWA_AREA_TERYT = "146501"
+WARSZAWA_DZIELNICE_TERYT = [f"1465{n:02d}" for n in range(2, 20)]
+
 
 def load_excel() -> pd.DataFrame:
     df = pd.read_excel(EXCEL_PATH)
@@ -48,16 +55,32 @@ def load_excel() -> pd.DataFrame:
     return df
 
 
-def build_rules_for_gmina(excel: pd.DataFrame, teryt: str) -> tuple[list, str]:
-    subset = excel[excel["teryt"] == teryt]
-    if subset.empty:
-        raise ValueError(f"Brak obwodów w Excelu dla teryt={teryt}")
-    gmina_name = subset["Gmina"].iloc[0]
+def build_rules_for_gmina(excel: pd.DataFrame, teryt: str) -> tuple[list, str, dict, dict]:
+    """Zwraca (reguły, nazwa gminy, obwod->teryt, obwod->dzielnica).
+
+    Dla zwykłej gminy `obwod->teryt` mapuje każdy obwód na ten sam, stały teryt
+    (spójne z Warszawą, gdzie mapowanie faktycznie się różni per obwód) —
+    dzięki temu `generate_for_teryt`/`export_election_areas` nie potrzebują
+    osobnej gałęzi dla obu przypadków."""
+    if teryt == WARSZAWA_AREA_TERYT:
+        subset = excel[excel["teryt"].isin(WARSZAWA_DZIELNICE_TERYT)]
+        if subset.empty:
+            raise ValueError("Brak obwodów w Excelu dla Warszawy")
+        gmina_name = "Warszawa"
+        obwod_dzielnica = dict(zip(subset["obwod"], subset["Gmina"]))
+    else:
+        subset = excel[excel["teryt"] == teryt]
+        if subset.empty:
+            raise ValueError(f"Brak obwodów w Excelu dla teryt={teryt}")
+        gmina_name = subset["Gmina"].iloc[0]
+        obwod_dzielnica = {}
+
     rules = [
         parse_opis_granic(int(row["obwod"]), str(row["Typ obszaru"]), str(row["Opis granic"]))
         for _, row in subset.iterrows()
     ]
-    return rules, gmina_name
+    obwod_teryt = dict(zip(subset["obwod"], subset["teryt"]))
+    return rules, gmina_name, obwod_teryt, obwod_dzielnica
 
 
 def quality_flag(report: dict) -> str:
@@ -69,43 +92,51 @@ def quality_flag(report: dict) -> str:
 
 
 def export_election_areas(
-    teryt: str,
+    area_teryt: str,
     gmina_name: str,
     polygons: gpd.GeoDataFrame,
     quality: str,
     national_results: dict[str, pd.DataFrame],
 ) -> dict[str, dict]:
     """Łączy wygenerowane poligony z wynikami per wybory i eksportuje GeoJSON
-    gotowy do wpięcia jako `area` w manifest.json."""
+    gotowy do wpięcia jako `area` w manifest.json.
+
+    `polygons` musi mieć własną kolumnę `teryt` per wiersz (dla zwykłej gminy
+    stały, dla Warszawy różny per dzielnica) — złączenie z wynikami idzie po
+    `["teryt", "obwod"]`, nie samym `obwod`, żeby poprawnie obsłużyć oba
+    przypadki bez osobnej gałęzi kodu."""
     bounds = polygons.total_bounds  # minx, miny, maxx, maxy
     center = [round((bounds[1] + bounds[3]) / 2, 4), round((bounds[0] + bounds[2]) / 2, 4)]
     display_name = gmina_name.replace("m. ", "").replace("gm. ", "")
+    has_dzielnica = "dzielnica" in polygons.columns
 
     areas = {}
     for election_id, results in national_results.items():
-        subset = results[results["teryt"] == teryt]
-        merged = polygons.merge(subset, on="obwod", how="left")
+        merged = polygons.merge(results, on=["teryt", "obwod"], how="left")
         matched = int(merged["winner"].notna().sum())
         total = int(len(merged))
 
         merged["results_json"] = merged["results"].apply(
             lambda value: json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else "{}"
         )
-        export = merged[["obwod", "komisja", "frekwencja", "glosy_wazne", "winner", "results_json", "geometry"]].copy()
+        cols = ["obwod", "teryt", "komisja", "frekwencja", "glosy_wazne", "winner", "results_json"]
+        if has_dzielnica:
+            cols.append("dzielnica")
+        cols.append("geometry")
+        export = merged[cols].copy()
         export = export.rename(columns={"results_json": "results"})
         export["frekwencja"] = export["frekwencja"].fillna(0)
         export["glosy_wazne"] = export["glosy_wazne"].fillna(0)
-        export["teryt"] = teryt
 
-        file_name = f"{election_id}_{teryt}.geojson"
+        file_name = f"{election_id}_{area_teryt}.geojson"
         export.to_file(PROCESSED_DIR / file_name, driver="GeoJSON")
 
         areas[election_id] = {
             "name": display_name,
-            "teryt": teryt,
+            "teryt": area_teryt,
             "file": file_name,
             "center": center,
-            "zoom": 13,
+            "zoom": 10 if area_teryt == WARSZAWA_AREA_TERYT else 13,
             "quality": quality,
             "matched": matched,
             "total": total,
@@ -120,7 +151,7 @@ def generate_for_teryt(
     national_results: dict[str, pd.DataFrame],
 ) -> dict:
     print(f"\n=== Generowanie: {teryt} ===")
-    rules_list, gmina_name = build_rules_for_gmina(excel, teryt)
+    rules_list, gmina_name, obwod_teryt, obwod_dzielnica = build_rules_for_gmina(excel, teryt)
     print(f"  Gmina: {gmina_name}, obwody: {len(rules_list)}")
 
     addresses = fetch_addresses_for_teryt(teryt, CACHE_DIR)
@@ -139,11 +170,14 @@ def generate_for_teryt(
 
     polygons = build_voronoi_polygons(assigned, boundary=boundary)
     polygons["obwod"] = polygons["obwod"].astype(int)
+    polygons["teryt"] = polygons["obwod"].map(obwod_teryt).fillna(teryt)
+    if obwod_dzielnica:
+        polygons["dzielnica"] = polygons["obwod"].map(obwod_dzielnica)
 
     quality = quality_flag(report)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     geojson_path = OUTPUT_DIR / f"{teryt}.geojson"
-    polygons.assign(teryt=teryt).to_file(geojson_path, driver="GeoJSON")
+    polygons.to_file(geojson_path, driver="GeoJSON")
     print(f"  Zapisano: {geojson_path} (jakość: {quality})")
 
     areas = export_election_areas(teryt, gmina_name, polygons, quality, national_results)
@@ -167,14 +201,15 @@ def update_manifest(quality_report: list[dict]) -> None:
 
     for entry in manifest["elections"]:
         election_id = entry["id"]
-        existing_teryty = {area["teryt"] for area in entry["areas"]}
         for gmina_report in quality_report:
             if "areas" not in gmina_report or election_id not in gmina_report["areas"]:
                 continue
             teryt = gmina_report["teryt"]
-            if teryt in existing_teryty:
-                continue
-            entry["areas"].append(gmina_report["areas"][election_id])
+            new_area = gmina_report["areas"][election_id]
+            # Upsert: nadpisz istniejący wpis dla tego teryt (np. po ponownym
+            # wygenerowaniu gminy z poprawką), zamiast go po cichu pomijać.
+            entry["areas"] = [area for area in entry["areas"] if area["teryt"] != teryt]
+            entry["areas"].append(new_area)
 
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Manifest zaktualizowany: {manifest_path}")
