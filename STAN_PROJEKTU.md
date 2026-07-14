@@ -13,7 +13,9 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 3. po wyborze widać **siatkę obwodów z nałożonymi wynikami** (frekwencja, wyniki list/kandydatów, zwycięzca w obwodzie),
 4. kliknięcie w obwód pokazuje **szczegóły** (numer, adres komisji, wyniki).
 
-**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). **Etap 3** dodał widok całej Polski (kartogram gmin). **Etap 5** przeniósł frontend na kafelki wektorowe (PMTiles + MapLibre GL) z automatycznym przełączaniem gminy↔obwody wg zoomu — architektura gotowa na skalowanie do ~31 500 obwodów, gdy tylko przybędzie więcej wygenerowanych gmin (Etap 4).
+**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). **Etap 3** dodał widok całej Polski (kartogram gmin). **Etap 5** przeniósł frontend na kafelki wektorowe (PMTiles + MapLibre GL) z automatycznym przełączaniem gminy↔obwody wg zoomu. **Etap 6** opublikował aplikację publicznie.
+
+**Aplikacja działa pod adresem: https://michalbutkiewicz0000.github.io/mapa_obwodow/**
 
 Pełny wieloetapowy plan wdrożenia: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.
 

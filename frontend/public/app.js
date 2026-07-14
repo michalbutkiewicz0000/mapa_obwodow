@@ -77,6 +77,55 @@ function topResults(results, limit = 5) {
     .slice(0, limit);
 }
 
+// ---------- wyszukiwarka gmin/miast ----------
+
+let searchIndex = [];
+
+function geometryBounds(geometry) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  (function walk(coords) {
+    if (typeof coords[0] === "number") {
+      const [x, y] = coords;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    } else {
+      coords.forEach(walk);
+    }
+  })(geometry.coordinates);
+  return [minX, minY, maxX, maxY];
+}
+
+function buildSearchIndex() {
+  searchIndex = [];
+  (countryData?.features || []).forEach((f) => {
+    if (!f.properties.gmina_nazwa) return;
+    const [minX, minY, maxX, maxY] = geometryBounds(f.geometry);
+    searchIndex.push({ label: f.properties.gmina_nazwa, center: [(minX + maxX) / 2, (minY + maxY) / 2], zoom: 11 });
+  });
+  (currentElection?.areas || []).forEach((area) => {
+    searchIndex.push({ label: area.name, center: [area.center[1], area.center[0]], zoom: area.zoom });
+  });
+
+  const datalist = document.getElementById("search-list");
+  const seen = new Set();
+  datalist.innerHTML = searchIndex
+    .filter((item) => (seen.has(item.label) ? false : seen.add(item.label)))
+    .map((item) => `<option value="${item.label}"></option>`)
+    .join("");
+}
+
+function handleSearch(query) {
+  const match = searchIndex.find((item) => item.label.toLowerCase() === query.trim().toLowerCase());
+  if (!match) return;
+  closePopup();
+  map.flyTo({ center: match.center, zoom: match.zoom });
+}
+
 function findAreaForTeryt(teryt) {
   if (!currentElection || !teryt) return null;
   return currentElection.areas.find((area) => area.teryt === teryt) || null;
@@ -231,6 +280,15 @@ function showObwodPopup(feature, lngLat) {
       ${result.komisja ? `<p><strong>Komisja:</strong> ${result.komisja}</p>` : ""}
       ${resultLines ? `<ul>${resultLines}</ul>` : ""}
       ${
+        result.wyborcy || result.opis_granic
+          ? `<details class="popup-details">
+              <summary>Więcej szczegółów</summary>
+              ${result.wyborcy ? `<p><strong>Liczba wyborców:</strong> ${result.wyborcy}</p>` : ""}
+              ${result.opis_granic ? `<p><strong>Opis granic (PKW):</strong> ${result.opis_granic}</p>` : ""}
+            </details>`
+          : ""
+      }
+      ${
         props.quality !== "official"
           ? `<p class="quality-note">${qualityBadge(props.quality)}<br>Kształt tego obwodu jest przybliżony (wygenerowany z opisu granic PKW i punktów adresowych, nie z oficjalnego geoportalu).</p>`
           : ""
@@ -334,7 +392,7 @@ function applyResultsFeatureState() {
 
 let loadToken = 0;
 
-async function loadElection(electionId) {
+async function loadElection(electionId, options = {}) {
   const token = ++loadToken;
   const election = manifest.elections.find((item) => item.id === electionId);
 
@@ -356,19 +414,50 @@ async function loadElection(electionId) {
   map.getSource("gminy").setData(countryData);
   applyResultsFeatureState();
   applyStyles();
+  buildSearchIndex();
 
-  if (!currentElection.country && currentElection.areas.length) {
+  if (!options.skipAutoJump && !currentElection.country && currentElection.areas.length) {
     const area = currentElection.areas[0];
     map.jumpTo({ center: [area.center[1], area.center[0]], zoom: Math.max(area.zoom, OBWODY_MIN_ZOOM + 1) });
   }
 
   renderStats();
   updateContext();
+  updateHash();
+}
+
+// ---------- permalink (stan w hashu URL) ----------
+
+function parseHash() {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const lng = parseFloat(params.get("lng"));
+  const lat = parseFloat(params.get("lat"));
+  const zoom = parseFloat(params.get("zoom"));
+  return {
+    election: params.get("election"),
+    metric: params.get("metric"),
+    center: Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null,
+    zoom: Number.isFinite(zoom) ? zoom : null,
+  };
+}
+
+function updateHash() {
+  if (!currentElection || !map) return;
+  const center = map.getCenter();
+  const params = new URLSearchParams({
+    election: currentElection.id,
+    metric: currentMetric,
+    lng: center.lng.toFixed(4),
+    lat: center.lat.toFixed(4),
+    zoom: map.getZoom().toFixed(2),
+  });
+  history.replaceState(null, "", "#" + params.toString());
 }
 
 async function init() {
   const manifestResponse = await fetch("data/manifest.json");
   manifest = await manifestResponse.json();
+  const hash = parseHash();
 
   const protocol = new pmtiles.Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -387,8 +476,8 @@ async function init() {
       },
       layers: [{ id: "osm", type: "raster", source: "osm" }],
     },
-    center: [19.3, 52.0],
-    zoom: 6,
+    center: hash.center || [19.3, 52.0],
+    zoom: hash.zoom ?? 6,
   });
 
   map.addControl(new maplibregl.NavigationControl(), "top-left");
@@ -472,9 +561,26 @@ async function init() {
   document.getElementById("metric").addEventListener("change", (e) => {
     currentMetric = e.target.value;
     applyStyles();
+    updateHash();
+  });
+  map.on("moveend", updateHash);
+
+  const searchInput = document.getElementById("search");
+  searchInput.addEventListener("change", (e) => handleSearch(e.target.value));
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleSearch(searchInput.value);
   });
 
-  await loadElection(manifest.elections[0].id);
+  const initialElectionId =
+    hash.election && manifest.elections.some((e) => e.id === hash.election)
+      ? hash.election
+      : manifest.elections[0].id;
+  if (hash.metric === "frekwencja" || hash.metric === "winner") {
+    currentMetric = hash.metric;
+    document.getElementById("metric").value = hash.metric;
+  }
+  select.value = initialElectionId;
+  await loadElection(initialElectionId, { skipAutoJump: Boolean(hash.center) });
 }
 
 init().catch((error) => {

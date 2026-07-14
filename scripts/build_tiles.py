@@ -127,6 +127,7 @@ def build_results_json() -> None:
                         results = json.loads(results)
                     except json.JSONDecodeError:
                         results = {}
+                wyborcy = getattr(row, "wyborcy", None)
                 combined[key] = {
                     "frekwencja": float(row.frekwencja) if pd.notna(row.frekwencja) else 0,
                     "glosy_wazne": int(row.glosy_wazne) if pd.notna(row.glosy_wazne) else 0,
@@ -134,6 +135,8 @@ def build_results_json() -> None:
                     "results": results if isinstance(results, dict) else {},
                     "komisja": getattr(row, "komisja", "") or "",
                     "dzielnica": getattr(row, "dzielnica", "") or "",
+                    "wyborcy": int(wyborcy) if wyborcy is not None and pd.notna(wyborcy) else None,
+                    "opis_granic": getattr(row, "opis_granic", "") or "",
                 }
 
         out_path = PROCESSED_DIR / f"results_{election_id}.json"

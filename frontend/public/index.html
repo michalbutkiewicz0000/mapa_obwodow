@@ -16,6 +16,10 @@
           ← Powrót do mapy Polski
         </button>
 
+        <label for="search">Szukaj gminy / miasta</label>
+        <input type="text" id="search" list="search-list" placeholder="np. Kraków, Przasnysz…" autocomplete="off" />
+        <datalist id="search-list"></datalist>
+
         <label for="election">Wybory</label>
         <select id="election"></select>
 
@@ -27,6 +31,8 @@
 
         <div id="stats" class="stats"></div>
         <div id="legend" class="legend"></div>
+
+        <a href="o-danych.html" class="about-link">O danych i metodologii →</a>
       </aside>
       <main id="map" class="map"></main>
     </div>

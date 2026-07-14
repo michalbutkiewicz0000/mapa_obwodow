@@ -40,12 +40,27 @@ label {
   font-size: 0.9rem;
 }
 
-select {
+select,
+input[type="text"] {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid #ccc;
   border-radius: 6px;
   background: #fff;
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+
+.about-link {
+  display: block;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  color: #333;
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
 }
 
 .stats {
@@ -126,6 +141,22 @@ select {
   color: #666;
 }
 
+.popup-details {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.popup-details summary {
+  cursor: pointer;
+  color: #333;
+  font-weight: 600;
+}
+
+.popup-details p {
+  margin: 0.35rem 0;
+  color: #555;
+}
+
 .legend {
   margin-top: 1.25rem;
 }
@@ -202,5 +233,9 @@ select {
 
   .map {
     min-height: 60vh;
+  }
+
+  .maplibregl-popup {
+    max-width: 88vw !important;
   }
 }
