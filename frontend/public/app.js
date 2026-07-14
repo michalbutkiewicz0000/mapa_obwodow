@@ -29,6 +29,41 @@ let currentMetric = "frekwencja";
 let countryData = null; // GeoJSON gmin dla bieżących wyborów
 let resultsIndex = {}; // "{teryt}_{obwod}" -> {frekwencja, winner, results, komisja, dzielnica}
 let currentPopup = null;
+let currentTilesFile = null; // plik .pmtiles aktualnie załadowany jako źródło "obwody"
+
+function ensureObwodyLayer(tilesFile) {
+  if (tilesFile === currentTilesFile) return;
+
+  if (map.getLayer("obwody-fill")) map.removeLayer("obwody-fill");
+  if (map.getLayer("obwody-line")) map.removeLayer("obwody-line");
+  if (map.getSource("obwody")) map.removeSource("obwody");
+  currentTilesFile = null;
+
+  if (!tilesFile) return; // te wybory nie mają jeszcze żadnych poligonów obwodów
+
+  map.addSource("obwody", {
+    type: "vector",
+    url: `pmtiles://data/${tilesFile}`,
+    promoteId: "key",
+  });
+  map.addLayer({
+    id: "obwody-fill",
+    type: "fill",
+    source: "obwody",
+    "source-layer": "obwody",
+    minzoom: OBWODY_MIN_ZOOM,
+    paint: { "fill-color": "#cccccc", "fill-opacity": 0.7 },
+  });
+  map.addLayer({
+    id: "obwody-line",
+    type: "line",
+    source: "obwody",
+    "source-layer": "obwody",
+    minzoom: OBWODY_MIN_ZOOM,
+    paint: { "line-color": "#333333", "line-width": 1 },
+  });
+  currentTilesFile = tilesFile;
+}
 
 function qualityBadge(quality) {
   if (!quality) return "";
@@ -343,6 +378,7 @@ function applyGminaStyle() {
 }
 
 function applyObwodyStyle() {
+  if (!map.getLayer("obwody-fill")) return; // te wybory nie mają jeszcze poligonów obwodów
   if (currentMetric === "frekwencja") {
     map.setPaintProperty("obwody-fill", "fill-color", [
       "case",
@@ -381,6 +417,7 @@ function clearObwodyFeatureState() {
 }
 
 function applyResultsFeatureState() {
+  if (!map.getSource("obwody")) return;
   clearObwodyFeatureState();
   Object.entries(resultsIndex).forEach(([key, result]) => {
     map.setFeatureState(
@@ -412,6 +449,7 @@ async function loadElection(electionId, options = {}) {
   resultsIndex = results;
 
   map.getSource("gminy").setData(countryData);
+  ensureObwodyLayer(currentElection.tiles);
   applyResultsFeatureState();
   applyStyles();
   buildSearchIndex();
@@ -500,27 +538,9 @@ async function init() {
     paint: { "line-color": "#333333", "line-width": 1 },
   });
 
-  map.addSource("obwody", {
-    type: "vector",
-    url: "pmtiles://data/obwody.pmtiles",
-    promoteId: "key",
-  });
-  map.addLayer({
-    id: "obwody-fill",
-    type: "fill",
-    source: "obwody",
-    "source-layer": "obwody",
-    minzoom: OBWODY_MIN_ZOOM,
-    paint: { "fill-color": "#cccccc", "fill-opacity": 0.7 },
-  });
-  map.addLayer({
-    id: "obwody-line",
-    type: "line",
-    source: "obwody",
-    "source-layer": "obwody",
-    minzoom: OBWODY_MIN_ZOOM,
-    paint: { "line-color": "#333333", "line-width": 1 },
-  });
+  // Warstwa "obwody" jest tworzona dynamicznie w ensureObwodyLayer() —
+  // geometria obwodów jest per wybory (zmienia się w czasie), więc źródło
+  // kafelków trzeba podmieniać przy każdej zmianie wyborów (patrz loadElection).
 
   map.on("click", "gminy-fill", (e) => {
     if (e.features.length) showGminaPopup(e.features[0], e.lngLat);

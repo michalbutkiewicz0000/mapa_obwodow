@@ -296,7 +296,8 @@
           "matched": 723,
           "total": 723
         }
-      ]
+      ],
+      "tiles": "obwody_sejm2023.pmtiles"
     },
     {
       "id": "samorzad2024",
@@ -316,7 +317,8 @@
           "matched": 411,
           "total": 411
         }
-      ]
+      ],
+      "tiles": "obwody_samorzad2024.pmtiles"
     },
     {
       "id": "prez2025_t1",
@@ -614,7 +616,8 @@
           "matched": 723,
           "total": 723
         }
-      ]
+      ],
+      "tiles": "obwody_prez2025_t1.pmtiles"
     },
     {
       "id": "prez2025_t2",
@@ -912,7 +915,8 @@
           "matched": 723,
           "total": 723
         }
-      ]
+      ],
+      "tiles": "obwody_prez2025_t2.pmtiles"
     }
   ]
 }
