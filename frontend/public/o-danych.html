@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>O danych — Mapa obwodów wyborczych</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .about-page {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: #1a1a1a;
+        line-height: 1.6;
+      }
+      .about-page h1 {
+        font-size: 1.6rem;
+      }
+      .about-page h2 {
+        font-size: 1.15rem;
+        margin-top: 2rem;
+      }
+      .about-page table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+      }
+      .about-page th,
+      .about-page td {
+        text-align: left;
+        padding: 0.4rem 0.6rem;
+        border-bottom: 1px solid #e5e5e5;
+      }
+      .about-page a.back {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+      }
+      .badge-legend {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin: 0.75rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="about-page">
+      <a class="back" href="index.html">← Powrót do mapy</a>
+      <h1>O danych i metodologii</h1>
+
+      <p>
+        Ta strona pokazuje wyniki wyborów w Polsce nałożone na granice obwodów głosowania. Dane wyborcze pochodzą
+        z oficjalnych źródeł PKW; granice obwodów są oficjalne tam, gdzie miasto publikuje je samo (dziś: Kraków),
+        a w pozostałych przypadkach — <strong>wygenerowane automatycznie</strong> na podstawie tekstowego opisu
+        granic PKW i oficjalnych punktów adresowych.
+      </p>
+
+      <h2>Jakość granic</h2>
+      <p>Każdy obszar z widokiem obwodów ma oznaczenie jakości granic, widoczne na mapie jako kolorowa plakietka:</p>
+      <div class="badge-legend">
+        <span class="quality-badge quality-official">granice oficjalne (MSIP)</span>
+        <span class="quality-badge quality-generated">granice wygenerowane — dobra jakość</span>
+        <span class="quality-badge quality-approximate">granice wygenerowane — przybliżone</span>
+      </div>
+      <p>
+        <strong>Oficjalne</strong> — granice pochodzą wprost z shapefile publikowanego przez urząd miasta (Miejski
+        System Informacji Przestrzennej). <strong>Wygenerowane</strong> — granice odtworzono z wiążącego opisu
+        tekstowego PKW („Opis granic”) przez dopasowanie adresów do reguł ulic/numerów i zbudowanie diagramu Woronoja
+        z przypisanych punktów adresowych; jakość „dobra” oznacza, że co najmniej 90% adresów w gminie dało się
+        jednoznacznie przypisać do obwodu, „przybliżone” — mniej.
+      </p>
+      <p>
+        Nawet przy dobrej jakości generator nie jest doskonały — pojedyncze obwody (zwykle instytucjonalne: szpitale,
+        więzienia, domy opieki) mogą nie mieć żadnego punktu adresowego w danych i pozostać niewidoczne na mapie.
+      </p>
+
+      <h2>Źródła danych</h2>
+      <table>
+        <tr><th>Cel</th><th>Źródło</th></tr>
+        <tr><td>Wyniki wyborów</td><td><a href="https://wybory.gov.pl/" target="_blank" rel="noopener">wybory.gov.pl</a> (Państwowa Komisja Wyborcza)</td></tr>
+        <tr><td>Granice obwodów — Kraków</td><td><a href="https://msip.krakow.pl/dataset/2684" target="_blank" rel="noopener">MSIP Kraków</a></td></tr>
+        <tr><td>Granice obwodów — inne miasta</td><td>wygenerowane z „Opisu granic” PKW + punkty adresowe PRG</td></tr>
+        <tr><td>Punkty adresowe (generator)</td><td>PRG / GUGiK — usługa WFS „Krajowa Integracja Numeracji Adresowej”</td></tr>
+        <tr><td>Granice gmin (widok krajowy)</td><td>domena publiczna — zbiór granic administracyjnych Polski</td></tr>
+        <tr><td>Metadane obwodów</td><td>arkusz Excel PKW (adres komisji, opis granic, liczba wyborców)</td></tr>
+      </table>
+
+      <h2>Zakres danych</h2>
+      <p>
+        Widok krajowy (mapa gmin) obejmuje wybory z pełnym pokryciem całej Polski w danych źródłowych PKW: wybory
+        parlamentarne 2023 oraz prezydenckie 2025 (obie tury). Wybory samorządowe 2024 pokazują wyniki tylko dla
+        Krakowa — PKW publikuje dla tych wyborów wyłącznie protokoły gmin powyżej 20 tys. mieszkańców w rozbiciu
+        per województwo, co nie stanowi kompletu danych krajowych.
+      </p>
+      <p>
+        Szczegółowy widok obwodów (poligony) obejmuje dziś 21 miast — pełna lista i historia rozwoju projektu
+        w pliku <code>STAN_PROJEKTU.md</code> repozytorium.
+      </p>
+
+      <h2>Kod źródłowy</h2>
+      <p>
+        Cały pipeline (pobieranie danych, parser opisu granic, generator poligonów, budowa kafelków) jest
+        open source. Zobacz repozytorium projektu na GitHubie.
+      </p>
+    </div>
+  </body>
+</html>

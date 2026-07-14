@@ -181,6 +181,27 @@ Co zostało zrobione:
 - kafelki dziś obejmują tylko 21 gmin (Kraków + pierwsza fala z Etapu 4) — reszta Polski nadal widoczna tylko na poziomie gmin, zgodnie z planem (docelowo `--all` z Etapu 4 zasili też kafelki bez zmian w `build_tiles.py`),
 - brak testu z realnie pełną Polską na poziomie obwodów (~31,5 tys.) — rozmiar `obwody.pmtiles` przy obecnych 698 obwodach to 0,37 MB; szacunek „kilkadziesiąt-150 MB" dla całego kraju z planu pozostaje niesprawdzony.
 
+### 8. Publikacja: GitHub Pages i szlif produktowy (Etap 6, działający)
+
+**Aplikacja jest publicznie dostępna: https://michalbutkiewicz0000.github.io/mapa_obwodow/**
+
+Repo: `github.com/michalbutkiewicz0000/mapa_obwodow` (publiczne). `gh` CLI nie było zainstalowane na tej maszynie — pobrany bezpośrednio jako binarka z GitHub Releases (bez Homebrew) do `~/.local/bin`; użytkownik zalogował się interaktywnie (`gh auth login`, przeglądarka).
+
+Co zostało zrobione:
+- **`.github/workflows/deploy-pages.yml`** — publikuje `frontend/public` na GitHub Pages (`actions/deploy-pages`) przy push do `main` (filtr `paths: frontend/public/**`) lub ręcznie (`workflow_dispatch`). Pages włączone w ustawieniach repo z `build_type: workflow`. Zweryfikowano: strona ładuje się (200), a **Range requests dla PMTiles działają (206 Partial Content)** — GitHub Pages obsługuje je natywnie, zgodnie z założeniem z planu.
+- **`.github/workflows/test.yml`** — uruchamia `pytest tests/` na każdy push/PR.
+- **`tests/`** — 32 testy: parser `parse_opis_granic` (zakresy, parzystość, `streets_equal` po całych słowach, rozstrzyganie konfliktów wg specyficzności), `utils.normalize_teryt/obwod/short_party_name/parse_int`, `build_gminy.aggregate_by_gmina` (suma głosów, frekwencja ważona, zero-padding TERYT), spójność `manifest.json` z plikami na dysku.
+- **Permalinki** — stan aplikacji (wybory, metryka, środek i zoom mapy) kodowany w hashu URL (`#election=...&metric=...&lng=...&lat=...&zoom=...`), aktualizowany na `moveend`/zmianę wyborów/metryki (`history.replaceState`, bez zaśmiecania historii). Odtwarzanie stanu z linku działa przy świeżym wczytaniu strony (zweryfikowane w headless Chrome).
+- **Wyszukiwarka gmin/miast** — pole tekstowe z `<datalist>` zbudowanym z nazw gmin bieżącego widoku krajowego + nazw obszarów z poligonami obwodów; wybór/Enter przenosi mapę (`flyTo`) do wyliczonego środka geometrii (dla gmin) lub zapisanego `center`/`zoom` (dla obszarów).
+- **Popup obwodu** — rozwijana sekcja „Więcej szczegółów” z liczbą wyborców i pełnym opisem granic PKW (pola dodane do `results_{election}.json` w `build_tiles.py`, wcześniej eksportowane, ale niewyświetlane).
+- **Strona `o-danych.html`** — źródła danych, wyjaśnienie znaczenia badge'y jakości granic (official/generated/approximate), zakres danych (które wybory mają widok krajowy i dlaczego samorzad2024 nie), link do repo.
+- **Responsywność mobilna** — sprawdzona w emulacji 390×844 (iPhone): sidebar nad mapą, kontrolki czytelne, popup ograniczony do 88vw na wąskich ekranach.
+- Tryb porównania dwóch wyborów **pominięty** (oznaczony w planie jako opcjonalny) — poza zakresem tej sesji.
+
+**Wciąż otwarte:**
+- brak automatycznego triggera dla `test.yml`/`deploy-pages.yml` przy zmianach w `data/`/`scripts/` poza `frontend/public` — budowa danych pozostaje w pełni lokalna/ręczna, zgodnie z planem,
+- limit rozmiaru repo (100 MB/plik, ~1 GB miękki limit) nieprzetestowany dla pełnopolskiego `obwody.pmtiles` — plan B (Cloudflare R2 + URL w manifeście) pozostaje niezrealizowany, bo dziś kafelki mają tylko 0,37 MB.
+
 ---
 
 ## Kluczowe ustalenia techniczne
@@ -230,19 +251,23 @@ mapa_obwodow/
 
 ---
 
-## Najbliższe kroki (rekomendowana kolejność — patrz pełny plan)
+## Najbliższe kroki
 
-### Etap 6 — publikacja (GitHub Pages) i szlif UX
+Wszystkie 6 etapów pierwotnego planu zrealizowane. Dalszy rozwój (nieplanowany szczegółowo):
+
+- `scripts/generate_boundaries.py --all` — wygenerować granice dla pozostałych ~2500 gmin (wiele godzin obliczeń, wymaga decyzji o zakresie/priorytetyzacji),
+- rejestr miast z oficjalnymi shapefile (`config/official_sources.yaml`) — Wrocław, Warszawa itd., w miarę znajdowania źródeł,
+- tryb porównania dwóch wyborów (oznaczony jako opcjonalny w oryginalnym planie, pominięty),
+- monitorowanie limitu rozmiaru repo GitHub w miarę wzrostu `obwody.pmtiles` — plan B: Cloudflare R2 + URL kafelków w manifeście (architektura już to wspiera).
 
 ---
 
 ## Czego świadomie nie zrobiono (jeszcze)
 
-- mapy obwodów dla całej Polski z poligonami,
-- integracji pilota z frontendem,
-- geokodowania / punktów PRG ogólnopolskich,
+- mapy obwodów dla całej Polski z poligonami (dziś 21/~2500 gmin),
+- geokodowania / punktów PRG dla reszty kraju,
 - wersji React (usunięta — nie była budowana, dublowała `app.js`),
-- publicznego deploymentu (GitHub Pages — planowane w Etapie 6).
+- trybu porównania dwóch wyborów (opcjonalny punkt planu).
 
 ---
 
@@ -262,4 +287,4 @@ mapa_obwodow/
 
 ## Podsumowanie jednym zdaniem
 
-**Aplikacja pokazuje całą Polskę jako kartogram 2479 gmin i płynnie (bez przeładowań) przełącza się na kafelki wektorowe (PMTiles + MapLibre GL) po przybliżeniu do jednego z 21 miast z poligonami obwodów: Krakowa (oficjalne granice MSIP) oraz 20 miast średniej wielkości z automatycznie wygenerowanymi granicami (PRG + Voronoi, 14 „dobrej jakości”, 6 „przybliżonych”). Generator PRG wyraźnie przebił wcześniejszy pilot na OSM (Kraków: 74,5%→87,6% przypisanych adresów, IoU 0,569→0,6033). Architektura (geometria i wyniki rozdzielone) jest gotowa na skalowanie do pełnej Polski — brakuje tylko wygenerowania większej liczby gmin (Etap 4 `--all`) i publikacji (Etap 6). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
+**Aplikacja jest publicznie dostępna pod https://michalbutkiewicz0000.github.io/mapa_obwodow/ i pokazuje całą Polskę jako kartogram 2479 gmin, płynnie przełączając się (bez przeładowań, kafelki PMTiles + MapLibre GL) na szczegółowe poligony obwodów po przybliżeniu do jednego z 21 miast: Krakowa (oficjalne granice MSIP) oraz 20 miast średniej wielkości z automatycznie wygenerowanymi granicami (PRG + Voronoi). Ma permalinki, wyszukiwarkę, stronę o metodologii, CI z 32 testami i działa na telefonie. Architektura (geometria i wyniki rozdzielone) jest gotowa na skalowanie do pełnej Polski — brakuje tylko wygenerowania większej liczby gmin (`generate_boundaries.py --all`). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
