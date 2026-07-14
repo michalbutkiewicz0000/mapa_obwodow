@@ -95,6 +95,8 @@ class ObwodRules:
 
 
 def normalize_text(value: str) -> str:
+    if not isinstance(value, str):
+        return ""
     value = unicodedata.normalize("NFKD", value)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     value = value.lower().strip()
