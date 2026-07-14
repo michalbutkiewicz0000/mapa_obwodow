@@ -20,10 +20,13 @@ def test_manifest_has_elections(manifest):
 
 
 def test_country_files_exist_on_disk(manifest):
+    # "country" jest teraz słownikiem per poziom (gminy/powiaty/wojewodztwa) —
+    # jeden wspólny plik na gminę zastąpiono trzema, po jednym na poziom (Etap 9).
     for election in manifest["elections"]:
         if election["country"]:
-            path = DATA_DIR / election["country"]["file"]
-            assert path.exists(), f"Brak pliku {path} dla wyborów {election['id']}"
+            for level_info in election["country"].values():
+                path = DATA_DIR / level_info["file"]
+                assert path.exists(), f"Brak pliku {path} dla wyborów {election['id']}"
 
 
 def test_area_files_exist_on_disk(manifest):

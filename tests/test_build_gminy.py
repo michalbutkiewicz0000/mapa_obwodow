@@ -1,6 +1,6 @@
 import pandas as pd
 
-from build_gminy import aggregate_by_gmina
+from build_gminy import aggregate_by_gmina, aggregate_by_powiat, aggregate_by_wojewodztwo
 
 
 def test_aggregate_by_gmina_sums_votes_and_weights_turnout():
@@ -100,3 +100,67 @@ def test_aggregate_by_gmina_merges_warszawa_dzielnice():
     assert row["obwody"] == 2
     assert row["glosy_wazne"] == 690 + 1780
     assert row["results"] == {"KO": 1600, "PiS": 870}
+
+
+def test_aggregate_by_powiat_groups_by_four_digit_prefix():
+    # Dwie różne gminy (020101, 020102) w tym samym powiecie (prefiks "0201")
+    # powinny się zsumować pod jednym kodem powiatu — bez osobnego mapowania
+    # dzielnic Warszawy: "146502"[:4] == "146501"[:4] == "1465", więc powiat
+    # naturalnie scala je tak samo jak jawny remap w aggregate_by_gmina.
+    results = pd.DataFrame(
+        [
+            {
+                "teryt": "020101",
+                "obwod": 1,
+                "eligible": 1000,
+                "voted": 600,
+                "glosy_wazne": 590,
+                "winner": "KO",
+                "results": {"KO": 400, "PiS": 190},
+            },
+            {
+                "teryt": "020102",
+                "obwod": 1,
+                "eligible": 500,
+                "voted": 300,
+                "glosy_wazne": 295,
+                "winner": "PiS",
+                "results": {"KO": 100, "PiS": 195},
+            },
+        ]
+    )
+    aggregated = aggregate_by_powiat(results)
+    assert len(aggregated) == 1
+    row = aggregated.iloc[0]
+    assert row["teryt"] == "0201"
+    assert row["obwody"] == 2
+    assert row["results"] == {"KO": 500, "PiS": 385}
+
+
+def test_aggregate_by_wojewodztwo_groups_by_two_digit_prefix():
+    results = pd.DataFrame(
+        [
+            {
+                "teryt": "126101",
+                "obwod": 1,
+                "eligible": 1000,
+                "voted": 600,
+                "glosy_wazne": 590,
+                "winner": "KO",
+                "results": {"KO": 400, "PiS": 190},
+            },
+            {
+                "teryt": "121101",
+                "obwod": 1,
+                "eligible": 500,
+                "voted": 300,
+                "glosy_wazne": 295,
+                "winner": "KO",
+                "results": {"KO": 200, "PiS": 95},
+            },
+        ]
+    )
+    aggregated = aggregate_by_wojewodztwo(results)
+    assert len(aggregated) == 1
+    assert aggregated.iloc[0]["teryt"] == "12"
+    assert aggregated.iloc[0]["obwody"] == 2

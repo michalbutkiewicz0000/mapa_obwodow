@@ -8,7 +8,10 @@ const PARTY_COLORS = {
   Bezpartyjni: "#666666",
 };
 
-const OBWODY_MIN_ZOOM = 9;
+const OBWODY_MIN_ZOOM = 9; // tylko próg do jakiego "Pokaż obwody"/wyszukiwarka podskakują, nie do widoczności warstw
+
+const COUNTRY_LEVELS = ["wojewodztwa", "powiaty", "gminy"];
+const ALL_LEVELS = [...COUNTRY_LEVELS, "obwody"];
 
 const QUALITY_LABELS = {
   official: "granice oficjalne (MSIP)",
@@ -26,7 +29,8 @@ let map;
 let manifest;
 let currentElection = null; // wpis z manifest.elections
 let currentMetric = "frekwencja";
-let countryData = null; // GeoJSON gmin dla bieżących wyborów
+let currentLevel = "gminy"; // wybrany poziom szczegółowości — niezależny od zoomu
+let levelData = { wojewodztwa: null, powiaty: null, gminy: null }; // GeoJSON per poziom dla bieżących wyborów
 let resultsIndex = {}; // "{teryt}_{obwod}" -> {frekwencja, winner, results, komisja, dzielnica}
 let currentPopup = null;
 let currentTilesFile = null; // plik .pmtiles aktualnie załadowany jako źródło "obwody"
@@ -51,7 +55,7 @@ function ensureObwodyLayer(tilesFile) {
     type: "fill",
     source: "obwody",
     "source-layer": "obwody",
-    minzoom: OBWODY_MIN_ZOOM,
+    layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
     paint: { "fill-color": "#cccccc", "fill-opacity": 0.7 },
   });
   map.addLayer({
@@ -59,10 +63,24 @@ function ensureObwodyLayer(tilesFile) {
     type: "line",
     source: "obwody",
     "source-layer": "obwody",
-    minzoom: OBWODY_MIN_ZOOM,
+    layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
     paint: { "line-color": "#333333", "line-width": 1 },
   });
   currentTilesFile = tilesFile;
+}
+
+function setLevel(level) {
+  currentLevel = level;
+  ALL_LEVELS.forEach((lvl) => {
+    if (!map.getLayer(`${lvl}-fill`)) return;
+    const visibility = lvl === level ? "visible" : "none";
+    map.setLayoutProperty(`${lvl}-fill`, "visibility", visibility);
+    map.setLayoutProperty(`${lvl}-line`, "visibility", visibility);
+  });
+  applyStyles();
+  renderStats();
+  updateContext();
+  updateHash();
 }
 
 function qualityBadge(quality) {
@@ -137,10 +155,13 @@ function geometryBounds(geometry) {
 
 function buildSearchIndex() {
   searchIndex = [];
-  (countryData?.features || []).forEach((f) => {
-    if (!f.properties.gmina_nazwa) return;
+  // Wyszukiwarka zawsze indeksuje gminy, niezależnie od aktualnie wybranego
+  // poziomu szczegółowości — to najdrobniejszy poziom krajowy i najbardziej
+  // użyteczny do wyszukiwania konkretnego miejsca.
+  (levelData.gminy?.features || []).forEach((f) => {
+    if (!f.properties.nazwa) return;
     const [minX, minY, maxX, maxY] = geometryBounds(f.geometry);
-    searchIndex.push({ label: f.properties.gmina_nazwa, center: [(minX + maxX) / 2, (minY + maxY) / 2], zoom: 11 });
+    searchIndex.push({ label: f.properties.nazwa, center: [(minX + maxX) / 2, (minY + maxY) / 2], zoom: 11 });
   });
   (currentElection?.areas || []).forEach((area) => {
     searchIndex.push({ label: area.name, center: [area.center[1], area.center[0]], zoom: area.zoom });
@@ -199,10 +220,17 @@ function renderLegend(metric, winners) {
   `;
 }
 
+const LEVEL_LABELS = {
+  wojewodztwa: "województw",
+  powiaty: "powiatów",
+  gminy: "gmin",
+  obwody: "obwodów",
+};
+
 function updateContext() {
   const backBtn = document.getElementById("back-to-country");
   const contextName = document.getElementById("context-name");
-  if (map.getZoom() < OBWODY_MIN_ZOOM) {
+  if (currentLevel !== "obwody") {
     contextName.textContent = "Polska";
     backBtn.style.display = "none";
     return;
@@ -216,22 +244,9 @@ function updateContext() {
 
 function renderStats() {
   const stats = document.getElementById("stats");
-  const countryInfo = currentElection.country;
-
   let html = "";
-  if (countryInfo) {
-    const gminyFeatures = countryData ? countryData.features : [];
-    const withResults = gminyFeatures.filter((f) => f.properties.winner);
-    const avgTurnout =
-      withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) / (withResults.length || 1);
-    html += `
-      <p><strong>Widok krajowy</strong></p>
-      <p>Gminy z wynikami: ${countryInfo.matched}/${countryInfo.total}</p>
-      <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
-    `;
-  }
 
-  if (map.getZoom() >= OBWODY_MIN_ZOOM) {
+  if (currentLevel === "obwody") {
     const visible = map.queryRenderedFeatures({ layers: ["obwody-fill"] });
     const seen = new Set();
     let sumTurnout = 0;
@@ -246,12 +261,25 @@ function renderStats() {
         withData += 1;
       }
     });
-    html += `
-      <p style="margin-top:0.75rem"><strong>Widok obwodowy (na ekranie)</strong></p>
-      <p>Obwody widoczne: ${seen.size}</p>
+    html = `
+      <p><strong>Obwody (na ekranie)</strong></p>
+      <p>Widoczne: ${seen.size}</p>
       <p>Z wynikami: ${withData}</p>
       <p>Średnia frekwencja: ${formatPercent(withData ? sumTurnout / withData : null)}</p>
     `;
+  } else {
+    const countryInfo = currentElection.country ? currentElection.country[currentLevel] : null;
+    const features = levelData[currentLevel]?.features || [];
+    const withResults = features.filter((f) => f.properties.winner);
+    const avgTurnout =
+      withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) / (withResults.length || 1);
+    html = countryInfo
+      ? `
+      <p><strong>Widok: ${LEVEL_LABELS[currentLevel]}</strong></p>
+      <p>Z wynikami: ${countryInfo.matched}/${countryInfo.total}</p>
+      <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
+    `
+      : `<p>Brak danych krajowych na poziomie „${LEVEL_LABELS[currentLevel]}" dla tych wyborów.</p>`;
   }
 
   stats.innerHTML = html;
@@ -266,18 +294,22 @@ function closePopup() {
   }
 }
 
-function showGminaPopup(feature, lngLat) {
+const LEVEL_UNIT_LABELS = { wojewodztwa: "Województwo", powiaty: "Powiat", gminy: "Gmina" };
+
+function showLevelPopup(feature, lngLat, level) {
   const props = feature.properties;
   const results = parseResults(props.results);
   const resultLines = topResults(results)
     .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
     .join("");
-  const area = findAreaForTeryt(props.teryt);
+  // Poligon obszaru z obwodami (jeśli jest) ma sens jako drill-down tylko z
+  // poziomu gmin — teryt powiatu/województwa nie odpowiada żadnemu areas[].teryt.
+  const area = level === "gminy" ? findAreaForTeryt(props.teryt) : null;
 
   const node = document.createElement("div");
   node.className = "popup";
   node.innerHTML = `
-    <h3>${props.gmina_nazwa ?? "Gmina"}</h3>
+    <h3>${props.nazwa ?? LEVEL_UNIT_LABELS[level]}</h3>
     <p><strong>Frekwencja:</strong> ${formatPercent(props.frekwencja)}</p>
     <p><strong>Głosy ważne:</strong> ${props.glosy_wazne ?? "—"}</p>
     ${props.winner ? `<p><strong>Zwycięzca:</strong> ${props.winner}</p>` : ""}
@@ -289,6 +321,9 @@ function showGminaPopup(feature, lngLat) {
   if (area) {
     node.querySelector(".show-area-btn").addEventListener("click", () => {
       closePopup();
+      const levelSelect = document.getElementById("level");
+      levelSelect.value = "obwody";
+      setLevel("obwody");
       map.flyTo({ center: [area.center[1], area.center[0]], zoom: Math.max(area.zoom, OBWODY_MIN_ZOOM + 1) });
     });
   }
@@ -369,12 +404,14 @@ function winnerFeatureStateExpression(winners) {
   return ["match", ["coalesce", ["feature-state", "winner"], ""], ...stops, "#cccccc"];
 }
 
-function applyGminaStyle() {
+function applyLevelStyle(level) {
+  if (!map.getLayer(`${level}-fill`)) return;
+  const features = levelData[level]?.features || [];
   const fillColor =
     currentMetric === "frekwencja"
       ? ["interpolate", ["linear"], ["coalesce", ["get", "frekwencja"], 0], ...frekwencjaColorStops()]
-      : winnerFillExpression(countryData ? countryData.features.map((f) => f.properties.winner) : []);
-  map.setPaintProperty("gminy-fill", "fill-color", fillColor);
+      : winnerFillExpression(features.map((f) => f.properties.winner));
+  map.setPaintProperty(`${level}-fill`, "fill-color", fillColor);
 }
 
 function applyObwodyStyle() {
@@ -395,14 +432,12 @@ function applyObwodyStyle() {
 }
 
 function applyStyles() {
-  applyGminaStyle();
+  COUNTRY_LEVELS.forEach(applyLevelStyle);
   applyObwodyStyle();
   const winners =
-    map.getZoom() >= OBWODY_MIN_ZOOM
+    currentLevel === "obwody"
       ? Object.values(resultsIndex).map((r) => r.winner)
-      : countryData
-        ? countryData.features.map((f) => f.properties.winner)
-        : [];
+      : (levelData[currentLevel]?.features || []).map((f) => f.properties.winner);
   renderLegend(currentMetric, winners);
 }
 
@@ -429,14 +464,21 @@ function applyResultsFeatureState() {
 
 let loadToken = 0;
 
+function emptyFeatureCollection() {
+  return { type: "FeatureCollection", features: [] };
+}
+
 async function loadElection(electionId, options = {}) {
   const token = ++loadToken;
   const election = manifest.elections.find((item) => item.id === electionId);
 
-  const [countryGeojson, results] = await Promise.all([
-    election.country
-      ? fetch(`data/${election.country.file}`).then((r) => r.json())
-      : Promise.resolve({ type: "FeatureCollection", features: [] }),
+  const [levelGeojsons, results] = await Promise.all([
+    Promise.all(
+      COUNTRY_LEVELS.map((level) => {
+        const info = election.country ? election.country[level] : null;
+        return info ? fetch(`data/${info.file}`).then((r) => r.json()) : Promise.resolve(emptyFeatureCollection());
+      }),
+    ),
     fetch(`data/results_${electionId}.json`).then((r) => (r.ok ? r.json() : {})),
   ]);
 
@@ -445,10 +487,12 @@ async function loadElection(electionId, options = {}) {
   if (token !== loadToken) return;
 
   currentElection = election;
-  countryData = countryGeojson;
+  COUNTRY_LEVELS.forEach((level, i) => {
+    levelData[level] = levelGeojsons[i];
+    map.getSource(level).setData(levelGeojsons[i]);
+  });
   resultsIndex = results;
 
-  map.getSource("gminy").setData(countryData);
   ensureObwodyLayer(currentElection.tiles);
   applyResultsFeatureState();
   applyStyles();
@@ -474,6 +518,7 @@ function parseHash() {
   return {
     election: params.get("election"),
     metric: params.get("metric"),
+    level: params.get("level"),
     center: Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null,
     zoom: Number.isFinite(zoom) ? zoom : null,
   };
@@ -485,6 +530,7 @@ function updateHash() {
   const params = new URLSearchParams({
     election: currentElection.id,
     metric: currentMetric,
+    level: currentLevel,
     lng: center.lng.toFixed(4),
     lat: center.lat.toFixed(4),
     zoom: map.getZoom().toFixed(2),
@@ -522,34 +568,37 @@ async function init() {
 
   await new Promise((resolve) => map.on("load", resolve));
 
-  map.addSource("gminy", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  map.addLayer({
-    id: "gminy-fill",
-    type: "fill",
-    source: "gminy",
-    maxzoom: OBWODY_MIN_ZOOM,
-    paint: { "fill-color": "#cccccc", "fill-opacity": 0.65 },
-  });
-  map.addLayer({
-    id: "gminy-line",
-    type: "line",
-    source: "gminy",
-    maxzoom: OBWODY_MIN_ZOOM,
-    paint: { "line-color": "#333333", "line-width": 1 },
+  // Trzy poziomy krajowe (województwa/powiaty/gminy) to osobne źródła/warstwy —
+  // widoczna jest tylko jedna naraz, sterowana przez setLevel() (poziom
+  // szczegółowości jest wyborem użytkownika, nie funkcją zoomu). Warstwa
+  // "obwody" jest tworzona dynamicznie w ensureObwodyLayer(), bo jej geometria
+  // jest per wybory (patrz loadElection).
+  COUNTRY_LEVELS.forEach((level) => {
+    map.addSource(level, { type: "geojson", data: emptyFeatureCollection() });
+    map.addLayer({
+      id: `${level}-fill`,
+      type: "fill",
+      source: level,
+      layout: { visibility: level === currentLevel ? "visible" : "none" },
+      paint: { "fill-color": "#cccccc", "fill-opacity": 0.65 },
+    });
+    map.addLayer({
+      id: `${level}-line`,
+      type: "line",
+      source: level,
+      layout: { visibility: level === currentLevel ? "visible" : "none" },
+      paint: { "line-color": "#333333", "line-width": 1 },
+    });
+    map.on("click", `${level}-fill`, (e) => {
+      if (e.features.length) showLevelPopup(e.features[0], e.lngLat, level);
+    });
+    map.on("mouseenter", `${level}-fill`, () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", `${level}-fill`, () => (map.getCanvas().style.cursor = ""));
   });
 
-  // Warstwa "obwody" jest tworzona dynamicznie w ensureObwodyLayer() —
-  // geometria obwodów jest per wybory (zmienia się w czasie), więc źródło
-  // kafelków trzeba podmieniać przy każdej zmianie wyborów (patrz loadElection).
-
-  map.on("click", "gminy-fill", (e) => {
-    if (e.features.length) showGminaPopup(e.features[0], e.lngLat);
-  });
   map.on("click", "obwody-fill", (e) => {
     if (e.features.length) showObwodPopup(e.features[0], e.lngLat);
   });
-  map.on("mouseenter", "gminy-fill", () => (map.getCanvas().style.cursor = "pointer"));
-  map.on("mouseleave", "gminy-fill", () => (map.getCanvas().style.cursor = ""));
   map.on("mouseenter", "obwody-fill", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "obwody-fill", () => (map.getCanvas().style.cursor = ""));
   // "idle" (nie tylko zoomend/moveend) — kafelki wektorowe ładują się async,
@@ -583,6 +632,10 @@ async function init() {
     applyStyles();
     updateHash();
   });
+  document.getElementById("level").addEventListener("change", (e) => {
+    closePopup();
+    setLevel(e.target.value);
+  });
   map.on("moveend", updateHash);
 
   const searchInput = document.getElementById("search");
@@ -598,6 +651,16 @@ async function init() {
   if (hash.metric === "frekwencja" || hash.metric === "winner") {
     currentMetric = hash.metric;
     document.getElementById("metric").value = hash.metric;
+  }
+  if (ALL_LEVELS.includes(hash.level)) {
+    currentLevel = hash.level;
+    document.getElementById("level").value = hash.level;
+    ALL_LEVELS.forEach((lvl) => {
+      if (!map.getLayer(`${lvl}-fill`)) return;
+      const visibility = lvl === currentLevel ? "visible" : "none";
+      map.setLayoutProperty(`${lvl}-fill`, "visibility", visibility);
+      map.setLayoutProperty(`${lvl}-line`, "visibility", visibility);
+    });
   }
   select.value = initialElectionId;
   await loadElection(initialElectionId, { skipAutoJump: Boolean(hash.center) });

@@ -4,10 +4,24 @@
       "id": "sejm2023",
       "label": "Wybory parlamentarne 15.10.2023",
       "country": {
-        "file": "gminy_sejm2023.geojson",
-        "unit": "gmina",
-        "matched": 2477,
-        "total": 2479
+        "gminy": {
+          "file": "gminy_sejm2023.geojson",
+          "unit": "gminy",
+          "matched": 2477,
+          "total": 2479
+        },
+        "powiaty": {
+          "file": "powiaty_sejm2023.geojson",
+          "unit": "powiaty",
+          "matched": 380,
+          "total": 380
+        },
+        "wojewodztwa": {
+          "file": "wojewodztwa_sejm2023.geojson",
+          "unit": "wojewodztwa",
+          "matched": 16,
+          "total": 16
+        }
       },
       "areas": [
         {
@@ -324,10 +338,24 @@
       "id": "prez2025_t1",
       "label": "Wybory prezydenckie 18.05.2025 (I tura)",
       "country": {
-        "file": "gminy_prez2025_t1.geojson",
-        "unit": "gmina",
-        "matched": 2479,
-        "total": 2479
+        "gminy": {
+          "file": "gminy_prez2025_t1.geojson",
+          "unit": "gminy",
+          "matched": 2479,
+          "total": 2479
+        },
+        "powiaty": {
+          "file": "powiaty_prez2025_t1.geojson",
+          "unit": "powiaty",
+          "matched": 380,
+          "total": 380
+        },
+        "wojewodztwa": {
+          "file": "wojewodztwa_prez2025_t1.geojson",
+          "unit": "wojewodztwa",
+          "matched": 16,
+          "total": 16
+        }
       },
       "areas": [
         {
@@ -623,10 +651,24 @@
       "id": "prez2025_t2",
       "label": "Wybory prezydenckie 01.06.2025 (II tura)",
       "country": {
-        "file": "gminy_prez2025_t2.geojson",
-        "unit": "gmina",
-        "matched": 2479,
-        "total": 2479
+        "gminy": {
+          "file": "gminy_prez2025_t2.geojson",
+          "unit": "gminy",
+          "matched": 2479,
+          "total": 2479
+        },
+        "powiaty": {
+          "file": "powiaty_prez2025_t2.geojson",
+          "unit": "powiaty",
+          "matched": 380,
+          "total": 380
+        },
+        "wojewodztwa": {
+          "file": "wojewodztwa_prez2025_t2.geojson",
+          "unit": "wojewodztwa",
+          "matched": 16,
+          "total": 16
+        }
       },
       "areas": [
         {
