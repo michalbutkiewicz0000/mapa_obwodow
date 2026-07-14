@@ -282,6 +282,19 @@
           "quality": "approximate",
           "matched": 20,
           "total": 20
+        },
+        {
+          "name": "Warszawa",
+          "teryt": "146501",
+          "file": "sejm2023_146501.geojson",
+          "center": [
+            52.233,
+            21.0608
+          ],
+          "zoom": 10,
+          "quality": "approximate",
+          "matched": 723,
+          "total": 723
         }
       ]
     },
@@ -587,6 +600,19 @@
           "quality": "approximate",
           "matched": 20,
           "total": 20
+        },
+        {
+          "name": "Warszawa",
+          "teryt": "146501",
+          "file": "prez2025_t1_146501.geojson",
+          "center": [
+            52.233,
+            21.0608
+          ],
+          "zoom": 10,
+          "quality": "approximate",
+          "matched": 723,
+          "total": 723
         }
       ]
     },
@@ -872,6 +898,19 @@
           "quality": "approximate",
           "matched": 20,
           "total": 20
+        },
+        {
+          "name": "Warszawa",
+          "teryt": "146501",
+          "file": "prez2025_t2_146501.geojson",
+          "center": [
+            52.233,
+            21.0608
+          ],
+          "zoom": 10,
+          "quality": "approximate",
+          "matched": 723,
+          "total": 723
         }
       ]
     }

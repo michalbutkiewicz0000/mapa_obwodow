@@ -2,6 +2,7 @@ from parse_opis_granic import (
     NumberRange,
     StreetRule,
     normalize_text,
+    parse_city_description,
     parse_opis_granic,
     parse_range_fragment,
     resolve_obwod,
@@ -22,6 +23,14 @@ def test_number_range_open_ended():
     assert rng.contains(10)
     assert rng.contains(1000)
     assert not rng.contains(9)
+
+
+def test_normalize_text_strips_prg_pelne_slowa_warszawa():
+    # PRG zapisuje ulice Warszawy pełnymi słowami ("ulica X", "Aleja X"), a nie
+    # skrótami jak rejestr PKW ("ul. X", "al. X") — bez normalizacji obu
+    # konwencji do tej samej postaci żaden adres Warszawy się nie dopasowywał.
+    assert normalize_text("ulica Urokliwa") == normalize_text("ul. Urokliwa")
+    assert normalize_text("Aleja Niepodległości") == normalize_text("al. Niepodległości")
 
 
 def test_streets_equal_exact_match():
@@ -62,6 +71,42 @@ def test_parse_range_fragment_do_konca():
     assert any(r.end is None for r in ranges)
 
 
+def test_parse_range_fragment_nieparzyste_not_confused_with_parzyste():
+    # "nieparzyste" zawiera "parzyste" jako podciąg — regresja na bug, gdzie
+    # sprawdzanie "parzyst" in słowo dawało "even" nawet dla "nieparzyste".
+    ranges, parity, street = parse_range_fragment("Krótka (nieparzyste)")
+    assert parity == "odd"
+    ranges, parity, street = parse_range_fragment("Krótka (parzyste)")
+    assert parity == "even"
+
+
+def test_parse_range_fragment_warszawa_strona_bez_nawiasu():
+    # Warszawa zapisuje parzystość jako "strona nieparzysta/parzysta" (bez
+    # nawiasu) i zakresy jako "od nr X do Y" (z wtrąconym "nr").
+    ranges, parity, street = parse_range_fragment("ul. Radiowa strona nieparzysta od nr 1 do 33")
+    assert parity == "odd"
+    assert street == "ul. Radiowa"
+    assert any(r.start == 1 and r.end == 33 for r in ranges)
+
+
+def test_parse_city_description_warszawa_multi_parity_continuation():
+    # Ta sama ulica z osobnymi zakresami dla nieparzystych i parzystych w
+    # kolejnych segmentach po przecinku — musi dać dwie StreetRule (bo jedna
+    # reguła ma tylko jedno pole parity), a nie nadpisywać się nawzajem.
+    _, _, streets = parse_city_description(
+        "ul. Radiowa strona nieparzysta od nr 1 do 33, strona parzysta nr 2, od nr 20 do 26"
+    )
+    odd_rules = [s for s in streets if s.name == "ul. Radiowa" and s.parity == "odd"]
+    even_rules = [s for s in streets if s.name == "ul. Radiowa" and s.parity == "even"]
+    assert len(odd_rules) == 1
+    assert any(r.start == 1 and r.end == 33 for r in odd_rules[0].ranges)
+    assert len(even_rules) == 1
+    even_numbers = {r.start for r in even_rules[0].ranges if r.start == r.end}
+    even_ranges = [r for r in even_rules[0].ranges if r.start != r.end]
+    assert 2 in even_numbers
+    assert any(r.start == 20 and r.end == 26 for r in even_ranges)
+
+
 def test_parse_opis_granic_wies():
     rules = parse_opis_granic(1, "wieś", "Nowa Wieś, Stara Wieś")
     assert "Nowa Wieś" in rules.villages
@@ -73,6 +118,17 @@ def test_parse_opis_granic_miasto_streets():
     names = [s.name for s in rules.streets]
     assert "Długa" in names
     assert "Krótka" in names
+
+
+def test_parse_opis_granic_warszawa_dzielnica_parses_as_streets():
+    # Rejestr PKW koduje 18 dzielnic Warszawy z Typ obszaru "dzielnica w m.st.
+    # Warszawa" zamiast "miasto" — bez tej gałęzi cały opis trafiał do
+    # rules.villages jako jedna (fałszywa) nazwa wsi i nic się nie dopasowywało.
+    rules = parse_opis_granic(711, "dzielnica w m.st. Warszawa", "ul. Bawełniana, ul. Grotowska")
+    assert rules.villages == []
+    names = [s.name for s in rules.streets]
+    assert any("Bawełniana" in n for n in names)
+    assert rules.matches("Bawełniana", 10)
 
 
 def test_resolve_obwod_no_match_returns_none():

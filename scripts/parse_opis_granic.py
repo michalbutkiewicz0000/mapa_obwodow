@@ -83,6 +83,12 @@ def normalize_text(value: str) -> str:
     value = re.sub(r"\s+", " ", value)
     value = value.replace("ul.", "").replace("ul ", "").replace("al.", "").replace("al ", "")
     value = value.replace("os.", "").replace("pl.", "").replace("rondo ", "")
+    # PRG zapisuje ulice Warszawy pełnymi słowami zamiast skrótów: "ulica X",
+    # "Aleja/Aleje X", "Trakt X", itd. — bez tego żaden adres z Warszawy nie
+    # dopasowywał się do reguł (te używają skrótów "ul."/"al." z rejestru PKW).
+    value = value.replace("ulica ", "").replace("aleja ", "").replace("aleje ", "")
+    value = value.replace("trakt ", "").replace("rynek ", "").replace("bulwar ", "")
+    value = value.replace("skwer ", "").replace("pasaz ", "")
     value = re.sub(r"[\"'„”]", "", value)
     return value.strip(" ,.")
 
@@ -133,10 +139,17 @@ def parse_range_fragment(fragment: str) -> tuple[list[NumberRange], Parity, str 
     ranges: list[NumberRange] = []
     street_name: str | None = None
 
+    # Dwie konwencje zapisu parzystości: "(parzyste)"/"(nieparzyste)" w nawiasie
+    # (większość rejestrów) oraz "strona parzysta"/"strona nieparzysta" bez nawiasu
+    # (Warszawa). Uwaga: "nieparzyste" zawiera "parzyste" jako podciąg — sprawdzamy
+    # prefiks "nie", a nie samo wystąpienie "parzyst", żeby nie odwrócić parzystości.
     parity_match = re.search(r"\((parzyste|nieparzyste)\)", fragment, re.I)
+    if not parity_match:
+        parity_match = re.search(r"\bstrona\s+(nieparzyst\w*|parzyst\w*)", fragment, re.I)
     if parity_match:
-        parity = "even" if "parzyst" in parity_match.group(1).lower() else "odd"
-        fragment = fragment[: parity_match.start()].strip()
+        word = parity_match.group(1).lower()
+        parity = "odd" if word.startswith("nie") else "even"
+        fragment = (fragment[: parity_match.start()] + " " + fragment[parity_match.end():]).strip()
 
     if re.search(r"\bdo ko[nń]ca\b", fragment, re.I):
         nums = re.findall(r"\d+", fragment)
@@ -150,10 +163,23 @@ def parse_range_fragment(fragment: str) -> tuple[list[NumberRange], Parity, str 
         ranges.append(NumberRange(start=min(start, end), end=max(start, end)))
         fragment = fragment.replace(match.group(0), " ")
 
-    for match in re.finditer(r"od\s+(\d+)\s+do\s+(\d+[a-z]?)", fragment, re.I):
+    # "nr" bywa wstawione przed numerem (Warszawa: "od nr 1 do 33") — opcjonalne.
+    for match in re.finditer(r"od\s+(?:nr\s+)?(\d+)\s+do\s+(?:nr\s+)?(\d+[a-z]?)", fragment, re.I):
         start = int(re.sub(r"\D", "", match.group(1)))
         end = int(re.sub(r"\D", "", match.group(2)))
         ranges.append(NumberRange(start=min(start, end), end=max(start, end)))
+        fragment = fragment.replace(match.group(0), " ")
+
+    # "od N" bez "do" (Warszawa: "ul. X: od 68") — zakres otwarty od N w górę.
+    for match in re.finditer(r"\bod\s+(?:nr\s+)?(\d+[a-z]?)\b", fragment, re.I):
+        n = int(re.sub(r"\D", "", match.group(1)))
+        ranges.append(NumberRange(start=n, end=None))
+        fragment = fragment.replace(match.group(0), " ")
+
+    # Pojedynczy numer zapisany jako "nr N" (bez zakresu) — traktujemy jako zakres N-N.
+    for match in re.finditer(r"\bnr\s+(\d+[a-z]?)\b", fragment, re.I):
+        n = int(re.sub(r"\D", "", match.group(1)))
+        ranges.append(NumberRange(start=n, end=n))
         fragment = fragment.replace(match.group(0), " ")
 
     fragment = re.sub(r"\s+", " ", fragment).strip(" ,.")
@@ -189,14 +215,106 @@ def parse_city_description(body: str) -> tuple[str | None, str | None, list[Stre
         if street_name:
             streets.append(StreetRule(name=street_name, parity=parity, ranges=ranges))
             pending_street = streets[-1]
-        elif ranges and pending_street is not None:
-            pending_street.ranges.extend(ranges)
-            if parity != "all":
-                pending_street.parity = parity
+        elif (ranges or parity != "all") and pending_street is not None:
+            # Ta sama ulica może mieć osobne zakresy dla nieparzystych i parzystych
+            # (np. Warszawa: "strona nieparzysta od nr 1 do 33, strona parzysta nr 2,
+            # od nr 20 do 26") — jedna StreetRule ma jedno pole parity, więc zmiana
+            # parzystości w kontynuacji zaczyna nową regułę dla tej samej ulicy
+            # zamiast nadpisywać poprzednią.
+            if parity != "all" and parity != pending_street.parity:
+                pending_street = StreetRule(name=pending_street.name, parity=parity, ranges=list(ranges))
+                streets.append(pending_street)
+            else:
+                pending_street.ranges.extend(ranges)
+                if parity != "all":
+                    pending_street.parity = parity
         elif segment.strip():
             streets.append(StreetRule(name=segment.strip()))
 
     return locality, district, streets
+
+
+def _parse_warszawa_clause(clause: str) -> tuple[str | None, list[NumberRange], Parity]:
+    """Parsuje pojedynczą klauzulę numeryczną Warszawy (fragment po dwukropku,
+    ewentualnie po rozbiciu na "i"/"oraz"), zwraca (nazwa_ulicy_lub_None, zakresy,
+    parzystość)."""
+    ranges, parity, leftover = parse_range_fragment(clause)
+    if not leftover:
+        return None, ranges, parity
+    # Parzystość bywa zapisana gołym słowem, bez "strona" i bez nawiasu
+    # (np. "nieparzyste od 135 do 197", "od 2 do 92R parzyste").
+    if parity == "all":
+        parity_match = re.search(r"\b(nieparzyste|parzyste)\b", leftover, re.I)
+        if parity_match:
+            word = parity_match.group(1).lower()
+            parity = "odd" if word.startswith("nie") else "even"
+            leftover = (leftover[: parity_match.start()] + " " + leftover[parity_match.end():]).strip()
+    # Gołe numery bez słowa "nr" na końcu fragmentu (np. "ul. Oławska 1", "156").
+    number_match = re.search(r"^(.*?)\b(\d+[a-z]?(?:\s*,\s*\d+[a-z]?)*)\s*$", leftover, re.I)
+    street_part = leftover
+    if number_match and number_match.group(2):
+        for num in re.finditer(r"\d+[a-z]?", number_match.group(2), re.I):
+            n = int(re.sub(r"\D", "", num.group(0)))
+            ranges.append(NumberRange(start=n, end=n))
+        street_part = number_match.group(1).strip()
+    street_part = street_part.strip(" ,.")
+    return (street_part or None), ranges, parity
+
+
+def parse_warszawa_description(text: str) -> list[StreetRule]:
+    """Warszawa opisuje granice obwodów w formacie "ul. X: specyfikacja numerów"
+    (segmenty rozdzielone przecinkami i średnikami), zamiast prostej listy ulic
+    używanej przez inne miasta — stąd osobny parser. Specyfikacja może być:
+    "cała" (cała ulica), pojedynczy numer, zakres ("od X do Y"), zakres z
+    parzystością, albo kilka klauzul połączonych słowem "i"/"oraz" (osobne
+    zakresy dla nieparzystych i parzystych)."""
+    streets: list[StreetRule] = []
+    bare_number = re.compile(r"^\d+[a-z]?$", re.I)
+
+    # Warszawa łączy numery sąsiadujących budynków ukośnikiem (np. "1/3", "5/7")
+    # — traktujemy to jako dwa osobne numery, nie jeden nieparsowalny token.
+    text = re.sub(r"(\d+[a-z]?)/(\d+[a-z]?)", r"\1, \2", text, flags=re.I)
+
+    for raw_segment in split_segments(text.replace(";", ",")):
+        segment = raw_segment.strip()
+        if not segment:
+            continue
+
+        if ":" in segment:
+            name_part, spec_part = segment.split(":", 1)
+            name_part = name_part.strip()
+            spec_part = spec_part.strip()
+            if not name_part:
+                continue
+            if not spec_part or re.fullmatch(r"cał[ae]", spec_part, re.I):
+                streets.append(StreetRule(name=name_part))
+                continue
+            for clause in re.split(r"\s+(?:i|oraz)\s+", spec_part, flags=re.I):
+                clause = clause.strip(" ,.")
+                if not clause:
+                    continue
+                _, ranges, parity = _parse_warszawa_clause(clause)
+                streets.append(StreetRule(name=name_part, parity=parity, ranges=ranges))
+            continue
+
+        if bare_number.match(segment) and streets:
+            n = int(re.sub(r"\D", "", segment))
+            streets[-1].ranges.append(NumberRange(start=n, end=n))
+            continue
+
+        street_name, ranges, parity = _parse_warszawa_clause(segment)
+        if street_name:
+            streets.append(StreetRule(name=street_name, parity=parity, ranges=ranges))
+        elif ranges and streets:
+            last = streets[-1]
+            if parity != "all" and parity != last.parity:
+                streets.append(StreetRule(name=last.name, parity=parity, ranges=list(ranges)))
+            else:
+                last.ranges.extend(ranges)
+                if parity != "all":
+                    last.parity = parity
+
+    return streets
 
 
 def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
@@ -206,6 +324,14 @@ def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
     if typ_obszaru == "wieś" or (typ_obszaru == "miasto i wieś" and "ulice" not in text.lower()):
         villages = [part.strip() for part in re.split(r",| i ", text) if part.strip()]
         rules.villages = villages
+        return rules
+
+    if typ_obszaru == "dzielnica w m.st. Warszawa":
+        # Warszawa opisuje granice w formacie "ul. X: specyfikacja numerów"
+        # (patrz parse_warszawa_description), zupełnie inaczej niż pozostałe
+        # miasta — musi być rozpoznana przed ogólną heurystyką "ulice:"/"-"
+        # poniżej, bo nazwy ulic bywają myślnikowe i fałszywie by ją triggerowały.
+        rules.streets = parse_warszawa_description(text)
         return rules
 
     if "ulice:" in text.lower() or "-" in text.split(":")[0]:
