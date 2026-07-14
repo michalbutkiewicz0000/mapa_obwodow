@@ -76,6 +76,13 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
         source_path.unlink()
     gdf.to_file(source_path, driver="GeoJSON")
 
+    # Bez wymuszonego przerzedzania tippecanoe dropuje obwody dopiero, gdy kafelek
+    # przekroczy domyślny limit 500 KB — co daje niespójną gęstość: kafelek tuż pod
+    # limitem trzyma pełne ~15 tys. obwodów (przy z6 = "potłuczone szkło"), a
+    # sąsiedni mniej, co tworzy widoczną prostokątną granicę. --drop-densest-as-needed
+    # + niższy -M wymuszają jednolite przerzedzanie w widoku przeglądowym, a
+    # --extend-zooms-if-still-dropping i maxzoom (-zg) zachowują PEŁNY detal obwodów
+    # przy zbliżeniu (z9-10) — patrz weryfikacja: z10 nad miastami bez zmian.
     subprocess.run(
         [
             "tippecanoe",
@@ -83,6 +90,9 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
             "-l", "obwody",
             "-zg",
             "--force",
+            "--drop-densest-as-needed",
+            "--extend-zooms-if-still-dropping",
+            "-M", "120000",
             "--simplification=10",
             "--no-tile-compression",
             str(source_path),
