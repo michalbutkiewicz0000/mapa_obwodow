@@ -224,7 +224,7 @@ Wynik: 81,1% adresów dopasowanych (102533/126398), 723/805 obwodów z punktami,
 
 **Testy (Etap 8.4)** — dodano regresję dla agregacji dzielnic Warszawy, dla parsera (`nieparzyste` vs `parzyste`, format dwukropkowy, prefiksy PRG), oraz dla spójności manifestu (`test_tiles_exist_per_election`, `test_no_stale_shared_pmtiles`, `test_every_area_has_some_matched_results` — łapie klasę buga zero-padding).
 
-**Świadomie pominięte:** rejestr obwodów prez2025 (Etap 8.3, wymaga ręcznego pobrania CSV z portalu prezydent2025 — jeśli nie zostanie zrobione, prez2025 zostaje na geometrii z rejestru 2024, z drobnymi niedopasowaniami w `matched/total`).
+**Rejestr obwodów prez2025 (Etap 8.3)** — Warszawa i 20 miast przegenerowane z rejestrem obwodów prez2025 (ręcznie pobranym CSV z `prezydent2025.pkw.gov.pl/pl/dane_w_arkuszach`, ten sam wzorzec co pobieranie wyników w Etapie 1), wpięte wyłącznie do `prez2025_t1`/`prez2025_t2` w manifeście. Warszawa ma w tym rejestrze 851 obwodów (vs 805 w rejestrze ze stycznia 2024 użytym dla `sejm2023`) — potwierdza to diagnozę problemu nr 2 z początku Etapu 7/8. `generate_boundaries.py` dostał `--registry`/`--elections`/`--suffix` do obsługi alternatywnych rejestrów bez nadpisywania domyślnego przebiegu.
 
 ---
 
