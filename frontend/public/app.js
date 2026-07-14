@@ -8,13 +8,7 @@ const PARTY_COLORS = {
   Bezpartyjni: "#666666",
 };
 
-let map;
-let layer;
-let manifest;
-let currentData = null;
-let currentElection = null; // wpis z manifest.elections
-let viewMode = "country"; // "country" | "area"
-let currentArea = null;
+const OBWODY_MIN_ZOOM = 9;
 
 const QUALITY_LABELS = {
   official: "granice oficjalne (MSIP)",
@@ -27,6 +21,14 @@ const QUALITY_CLASSES = {
   generated: "quality-generated",
   approximate: "quality-approximate",
 };
+
+let map;
+let manifest;
+let currentElection = null; // wpis z manifest.elections
+let currentMetric = "frekwencja";
+let countryData = null; // GeoJSON gmin dla bieżących wyborów
+let resultsIndex = {}; // "{teryt}_{obwod}" -> {frekwencja, winner, results, komisja, dzielnica}
+let currentPopup = null;
 
 function qualityBadge(quality) {
   if (!quality) return "";
@@ -75,21 +77,14 @@ function topResults(results, limit = 5) {
     .slice(0, limit);
 }
 
-function styleFeature(feature, metric) {
-  const props = feature.properties;
-  const fillColor =
-    metric === "frekwencja"
-      ? frekwencjaColor(props.frekwencja)
-      : winnerColor(props.winner);
-  return {
-    fillColor,
-    fillOpacity: 0.65,
-    color: "#333333",
-    weight: 1,
-  };
+function findAreaForTeryt(teryt) {
+  if (!currentElection || !teryt) return null;
+  return currentElection.areas.find((area) => area.teryt === teryt) || null;
 }
 
-function renderLegend(metric, data) {
+// ---------- legenda / statystyki ----------
+
+function renderLegend(metric, winners) {
   const legend = document.getElementById("legend");
   if (metric === "frekwencja") {
     legend.innerHTML = `
@@ -102,12 +97,7 @@ function renderLegend(metric, data) {
     `;
     return;
   }
-  const winners = new Set(
-    (data?.features || [])
-      .map((f) => f.properties.winner)
-      .filter(Boolean),
-  );
-  const parties = [...winners].sort();
+  const parties = [...new Set(winners.filter(Boolean))].sort();
   legend.innerHTML = `
     <h2>Legenda</h2>
     <ul>
@@ -125,29 +115,74 @@ function renderLegend(metric, data) {
   `;
 }
 
-function renderStats(data, meta) {
+function updateContext() {
+  const backBtn = document.getElementById("back-to-country");
+  const contextName = document.getElementById("context-name");
+  if (map.getZoom() < OBWODY_MIN_ZOOM) {
+    contextName.textContent = "Polska";
+    backBtn.style.display = "none";
+    return;
+  }
+  const visible = map.queryRenderedFeatures({ layers: ["obwody-fill"] });
+  const teryty = new Set(visible.map((f) => f.properties.teryt));
+  const area = teryty.size === 1 ? findAreaForTeryt([...teryty][0]) : null;
+  contextName.innerHTML = area ? `${area.name} ${qualityBadge(area.quality)}` : "Polska";
+  backBtn.style.display = "block";
+}
+
+function renderStats() {
   const stats = document.getElementById("stats");
-  const withResults = data.features.filter((f) => f.properties.winner);
-  const avgTurnout =
-    withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) /
-    (withResults.length || 1);
+  const countryInfo = currentElection.country;
 
-  const coverageLabel = meta.unit === "gmina" ? "Gminy z wynikami" : "Pokrycie wynikami";
-  const countLabel = meta.unit === "gmina" ? "Gminy na mapie" : "Obwody na mapie";
+  let html = "";
+  if (countryInfo) {
+    const gminyFeatures = countryData ? countryData.features : [];
+    const withResults = gminyFeatures.filter((f) => f.properties.winner);
+    const avgTurnout =
+      withResults.reduce((sum, f) => sum + (f.properties.frekwencja || 0), 0) / (withResults.length || 1);
+    html += `
+      <p><strong>Widok krajowy</strong></p>
+      <p>Gminy z wynikami: ${countryInfo.matched}/${countryInfo.total}</p>
+      <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
+    `;
+  }
 
-  stats.innerHTML = `
-    <p>${coverageLabel}: ${meta.matched}/${meta.total}</p>
-    <p>${countLabel}: ${data.features.length}</p>
-    <p>Średnia frekwencja: ${formatPercent(avgTurnout)}</p>
-  `;
+  if (map.getZoom() >= OBWODY_MIN_ZOOM) {
+    const visible = map.queryRenderedFeatures({ layers: ["obwody-fill"] });
+    const seen = new Set();
+    let sumTurnout = 0;
+    let withData = 0;
+    visible.forEach((f) => {
+      const key = f.properties.key;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const result = resultsIndex[key];
+      if (result) {
+        sumTurnout += result.frekwencja || 0;
+        withData += 1;
+      }
+    });
+    html += `
+      <p style="margin-top:0.75rem"><strong>Widok obwodowy (na ekranie)</strong></p>
+      <p>Obwody widoczne: ${seen.size}</p>
+      <p>Z wynikami: ${withData}</p>
+      <p>Średnia frekwencja: ${formatPercent(withData ? sumTurnout / withData : null)}</p>
+    `;
+  }
+
+  stats.innerHTML = html;
 }
 
-function findAreaForTeryt(teryt) {
-  if (!currentElection || !teryt) return null;
-  return currentElection.areas.find((area) => area.teryt === teryt) || null;
+// ---------- popupy ----------
+
+function closePopup() {
+  if (currentPopup) {
+    currentPopup.remove();
+    currentPopup = null;
+  }
 }
 
-function bindGminaPopup(feature, mapLayer) {
+function showGminaPopup(feature, lngLat) {
   const props = feature.properties;
   const results = parseResults(props.results);
   const resultLines = topResults(results)
@@ -155,9 +190,9 @@ function bindGminaPopup(feature, mapLayer) {
     .join("");
   const area = findAreaForTeryt(props.teryt);
 
-  const popupNode = document.createElement("div");
-  popupNode.className = "popup";
-  popupNode.innerHTML = `
+  const node = document.createElement("div");
+  node.className = "popup";
+  node.innerHTML = `
     <h3>${props.gmina_nazwa ?? "Gmina"}</h3>
     <p><strong>Frekwencja:</strong> ${formatPercent(props.frekwencja)}</p>
     <p><strong>Głosy ważne:</strong> ${props.glosy_wazne ?? "—"}</p>
@@ -168,100 +203,257 @@ function bindGminaPopup(feature, mapLayer) {
     ${area ? qualityBadge(area.quality) : ""}
   `;
   if (area) {
-    popupNode.querySelector(".show-area-btn").addEventListener("click", () => {
-      loadArea(area);
+    node.querySelector(".show-area-btn").addEventListener("click", () => {
+      closePopup();
+      map.flyTo({ center: [area.center[1], area.center[0]], zoom: Math.max(area.zoom, OBWODY_MIN_ZOOM + 1) });
     });
   }
-  mapLayer.bindPopup(popupNode);
+
+  closePopup();
+  currentPopup = new maplibregl.Popup().setLngLat(lngLat).setDOMContent(node).addTo(map);
 }
 
-function bindObwodPopup(feature, mapLayer) {
+function showObwodPopup(feature, lngLat) {
   const props = feature.properties;
-  const results = parseResults(props.results);
+  const result = resultsIndex[props.key] || {};
+  const results = parseResults(result.results);
   const resultLines = topResults(results)
     .map(([name, votes]) => `<li><strong>${name}</strong>: ${votes}</li>`)
     .join("");
 
-  mapLayer.bindPopup(`
+  const html = `
     <div class="popup">
       <h3>Obwód ${props.obwod ?? "?"}</h3>
-      ${props.dzielnica ? `<p><em>${props.dzielnica}</em></p>` : ""}
-      <p><strong>Frekwencja:</strong> ${formatPercent(props.frekwencja)}</p>
-      <p><strong>Głosy ważne:</strong> ${props.glosy_wazne ?? "—"}</p>
-      ${props.winner ? `<p><strong>Zwycięzca:</strong> ${props.winner}</p>` : ""}
-      ${props.komisja ? `<p><strong>Komisja:</strong> ${props.komisja}</p>` : ""}
+      ${result.dzielnica ? `<p><em>${result.dzielnica}</em></p>` : ""}
+      <p><strong>Frekwencja:</strong> ${formatPercent(result.frekwencja)}</p>
+      <p><strong>Głosy ważne:</strong> ${result.glosy_wazne ?? "—"}</p>
+      ${result.winner ? `<p><strong>Zwycięzca:</strong> ${result.winner}</p>` : ""}
+      ${result.komisja ? `<p><strong>Komisja:</strong> ${result.komisja}</p>` : ""}
       ${resultLines ? `<ul>${resultLines}</ul>` : ""}
-      ${currentArea && currentArea.quality !== "official" ? `<p class="quality-note">${qualityBadge(currentArea.quality)}<br>Kształt tego obwodu jest przybliżony (wygenerowany z opisu granic PKW i punktów adresowych, nie z oficjalnego geoportalu).</p>` : ""}
+      ${
+        props.quality !== "official"
+          ? `<p class="quality-note">${qualityBadge(props.quality)}<br>Kształt tego obwodu jest przybliżony (wygenerowany z opisu granic PKW i punktów adresowych, nie z oficjalnego geoportalu).</p>`
+          : ""
+      }
     </div>
-  `);
+  `;
+  closePopup();
+  currentPopup = new maplibregl.Popup().setLngLat(lngLat).setHTML(html).addTo(map);
 }
 
-function drawMap(data, metric, onEachFeature) {
-  if (layer) {
-    map.removeLayer(layer);
+// ---------- stylowanie warstw ----------
+
+// MapLibre interpoluje kolory liniowo w RGB między przystankami, a nie przez
+// obrót odcieniem HSL jak dawny wzór frekwencjaColor — dlatego generujemy wiele
+// pośrednich przystanków obliczonych tym samym wzorem, żeby RGB-interpolacja
+// między sąsiednimi (bliskimi) przystankami dobrze przybliżała łuk HSL.
+function frekwencjaColorStops() {
+  const stops = [];
+  for (let i = 0; i <= 10; i += 1) {
+    const v = i / 10;
+    stops.push(v, frekwencjaColor(v));
   }
-  layer = L.geoJSON(data, {
-    style: (feature) => styleFeature(feature, metric),
-    onEachFeature,
-  }).addTo(map);
-  map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+  return stops;
 }
 
-function currentMetric() {
-  return document.getElementById("metric").value;
+function winnerFillExpression(winners) {
+  const unique = [...new Set(winners.filter(Boolean))];
+  if (unique.length === 0) return "#cccccc";
+  const stops = [];
+  unique.forEach((name) => {
+    stops.push(name, winnerColor(name));
+  });
+  return ["match", ["get", "winner"], ...stops, "#cccccc"];
 }
 
-function redraw() {
-  if (!currentData) return;
-  const metric = currentMetric();
-  renderLegend(metric, currentData);
-  drawMap(currentData, metric, viewMode === "country" ? bindGminaPopup : bindObwodPopup);
+function winnerFeatureStateExpression(winners) {
+  const unique = [...new Set(winners.filter(Boolean))];
+  if (unique.length === 0) return "#cccccc";
+  const stops = [];
+  unique.forEach((name) => {
+    stops.push(name, winnerColor(name));
+  });
+  return ["match", ["coalesce", ["feature-state", "winner"], ""], ...stops, "#cccccc"];
 }
 
-async function loadCountry() {
-  viewMode = "country";
-  currentArea = null;
-  document.getElementById("back-to-country").style.display = "none";
-  document.getElementById("context-name").textContent = "Polska";
-
-  const response = await fetch(`data/${currentElection.country.file}`);
-  if (!response.ok) throw new Error("Brak danych GeoJSON (gminy)");
-  currentData = await response.json();
-  renderStats(currentData, { ...currentElection.country, unit: "gmina" });
-  redraw();
+function applyGminaStyle() {
+  const fillColor =
+    currentMetric === "frekwencja"
+      ? ["interpolate", ["linear"], ["coalesce", ["get", "frekwencja"], 0], ...frekwencjaColorStops()]
+      : winnerFillExpression(countryData ? countryData.features.map((f) => f.properties.winner) : []);
+  map.setPaintProperty("gminy-fill", "fill-color", fillColor);
 }
 
-async function loadArea(area) {
-  viewMode = "area";
-  currentArea = area;
-  document.getElementById("back-to-country").style.display = currentElection.country ? "block" : "none";
-  document.getElementById("context-name").innerHTML = `${area.name} ${qualityBadge(area.quality)}`;
-
-  const response = await fetch(`data/${area.file}`);
-  if (!response.ok) throw new Error("Brak danych GeoJSON (obwody)");
-  currentData = await response.json();
-  renderStats(currentData, area);
-  redraw();
-  map.setView(area.center, area.zoom);
+function applyObwodyStyle() {
+  if (currentMetric === "frekwencja") {
+    map.setPaintProperty("obwody-fill", "fill-color", [
+      "case",
+      ["==", ["coalesce", ["feature-state", "frekwencja"], -1], -1],
+      "#cccccc",
+      ["interpolate", ["linear"], ["feature-state", "frekwencja"], ...frekwencjaColorStops()],
+    ]);
+  } else {
+    const winners = Object.values(resultsIndex)
+      .map((r) => r.winner)
+      .filter(Boolean);
+    map.setPaintProperty("obwody-fill", "fill-color", winnerFeatureStateExpression(winners));
+  }
 }
+
+function applyStyles() {
+  applyGminaStyle();
+  applyObwodyStyle();
+  const winners =
+    map.getZoom() >= OBWODY_MIN_ZOOM
+      ? Object.values(resultsIndex).map((r) => r.winner)
+      : countryData
+        ? countryData.features.map((f) => f.properties.winner)
+        : [];
+  renderLegend(currentMetric, winners);
+}
+
+// ---------- ładowanie danych ----------
+
+function clearObwodyFeatureState() {
+  try {
+    map.removeFeatureState({ source: "obwody", sourceLayer: "obwody" });
+  } catch {
+    // źródło jeszcze niezaładowane
+  }
+}
+
+function applyResultsFeatureState() {
+  clearObwodyFeatureState();
+  Object.entries(resultsIndex).forEach(([key, result]) => {
+    map.setFeatureState(
+      { source: "obwody", sourceLayer: "obwody", id: key },
+      { frekwencja: result.frekwencja, winner: result.winner },
+    );
+  });
+}
+
+let loadToken = 0;
 
 async function loadElection(electionId) {
-  currentElection = manifest.elections.find((item) => item.id === electionId);
-  if (currentElection.country) {
-    await loadCountry();
-  } else {
-    await loadArea(currentElection.areas[0]);
+  const token = ++loadToken;
+  const election = manifest.elections.find((item) => item.id === electionId);
+
+  const [countryGeojson, results] = await Promise.all([
+    election.country
+      ? fetch(`data/${election.country.file}`).then((r) => r.json())
+      : Promise.resolve({ type: "FeatureCollection", features: [] }),
+    fetch(`data/results_${electionId}.json`).then((r) => (r.ok ? r.json() : {})),
+  ]);
+
+  // Jeśli w międzyczasie użytkownik przełączył na inne wybory, ta (wolniejsza)
+  // odpowiedź jest nieaktualna — porzucamy ją, żeby nie nadpisać nowszego stanu.
+  if (token !== loadToken) return;
+
+  currentElection = election;
+  countryData = countryGeojson;
+  resultsIndex = results;
+
+  map.getSource("gminy").setData(countryData);
+  applyResultsFeatureState();
+  applyStyles();
+
+  if (!currentElection.country && currentElection.areas.length) {
+    const area = currentElection.areas[0];
+    map.jumpTo({ center: [area.center[1], area.center[0]], zoom: Math.max(area.zoom, OBWODY_MIN_ZOOM + 1) });
   }
+
+  renderStats();
+  updateContext();
 }
 
 async function init() {
   const manifestResponse = await fetch("data/manifest.json");
   manifest = await manifestResponse.json();
 
-  map = L.map("map").setView([52.0, 19.3], 6);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(map);
+  const protocol = new pmtiles.Protocol();
+  maplibregl.addProtocol("pmtiles", protocol.tile);
+
+  map = new maplibregl.Map({
+    container: "map",
+    style: {
+      version: 8,
+      sources: {
+        osm: {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        },
+      },
+      layers: [{ id: "osm", type: "raster", source: "osm" }],
+    },
+    center: [19.3, 52.0],
+    zoom: 6,
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), "top-left");
+
+  await new Promise((resolve) => map.on("load", resolve));
+
+  map.addSource("gminy", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer({
+    id: "gminy-fill",
+    type: "fill",
+    source: "gminy",
+    maxzoom: OBWODY_MIN_ZOOM,
+    paint: { "fill-color": "#cccccc", "fill-opacity": 0.65 },
+  });
+  map.addLayer({
+    id: "gminy-line",
+    type: "line",
+    source: "gminy",
+    maxzoom: OBWODY_MIN_ZOOM,
+    paint: { "line-color": "#333333", "line-width": 1 },
+  });
+
+  map.addSource("obwody", {
+    type: "vector",
+    url: "pmtiles://data/obwody.pmtiles",
+    promoteId: "key",
+  });
+  map.addLayer({
+    id: "obwody-fill",
+    type: "fill",
+    source: "obwody",
+    "source-layer": "obwody",
+    minzoom: OBWODY_MIN_ZOOM,
+    paint: { "fill-color": "#cccccc", "fill-opacity": 0.7 },
+  });
+  map.addLayer({
+    id: "obwody-line",
+    type: "line",
+    source: "obwody",
+    "source-layer": "obwody",
+    minzoom: OBWODY_MIN_ZOOM,
+    paint: { "line-color": "#333333", "line-width": 1 },
+  });
+
+  map.on("click", "gminy-fill", (e) => {
+    if (e.features.length) showGminaPopup(e.features[0], e.lngLat);
+  });
+  map.on("click", "obwody-fill", (e) => {
+    if (e.features.length) showObwodPopup(e.features[0], e.lngLat);
+  });
+  map.on("mouseenter", "gminy-fill", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "gminy-fill", () => (map.getCanvas().style.cursor = ""));
+  map.on("mouseenter", "obwody-fill", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "obwody-fill", () => (map.getCanvas().style.cursor = ""));
+  // "idle" (nie tylko zoomend/moveend) — kafelki wektorowe ładują się async,
+  // więc zaraz po zoomend mogą jeszcze nie być wyrenderowane.
+  map.on("idle", () => {
+    renderStats();
+    updateContext();
+  });
+
+  document.getElementById("back-to-country").addEventListener("click", () => {
+    closePopup();
+    map.flyTo({ center: [19.3, 52.0], zoom: 6 });
+  });
 
   const select = document.getElementById("election");
   manifest.elections.forEach((election) => {
@@ -271,13 +463,21 @@ async function init() {
     select.appendChild(option);
   });
 
-  select.addEventListener("change", () => loadElection(select.value));
-  document.getElementById("metric").addEventListener("change", redraw);
-  document.getElementById("back-to-country").addEventListener("click", () => loadCountry());
+  select.addEventListener("change", () => {
+    loadElection(select.value).catch((error) => {
+      console.error(error);
+      document.getElementById("stats").innerHTML = `<p class="error">${error.message}</p>`;
+    });
+  });
+  document.getElementById("metric").addEventListener("change", (e) => {
+    currentMetric = e.target.value;
+    applyStyles();
+  });
 
   await loadElection(manifest.elections[0].id);
 }
 
 init().catch((error) => {
+  console.error(error);
   document.getElementById("stats").innerHTML = `<p class="error">${error.message}</p>`;
 });

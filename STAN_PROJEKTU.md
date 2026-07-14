@@ -13,7 +13,7 @@ Celem jest **interaktywna strona internetowa z mapą obwodów głosowania w Pols
 3. po wyborze widać **siatkę obwodów z nałożonymi wynikami** (frekwencja, wyniki list/kandydatów, zwycięzca w obwodzie),
 4. kliknięcie w obwód pokazuje **szczegóły** (numer, adres komisji, wyniki).
 
-**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). **Etap 3** dodał widok całej Polski (kartogram gmin) dla wyborów z pełnym pokryciem krajowym. Dalszym celem jest **skalowanie na poziom obwodów w całej Polsce** (~31 500 obwodów), co wymaga generatora granic (Etap 4) i kafelków wektorowych (Etap 5).
+**MVP** zrealizowano dla **Krakowa** (411 obwodów z oficjalnymi poligonami MSIP). **Etap 3** dodał widok całej Polski (kartogram gmin). **Etap 5** przeniósł frontend na kafelki wektorowe (PMTiles + MapLibre GL) z automatycznym przełączaniem gminy↔obwody wg zoomu — architektura gotowa na skalowanie do ~31 500 obwodów, gdy tylko przybędzie więcej wygenerowanych gmin (Etap 4).
 
 Pełny wieloetapowy plan wdrożenia: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.
 
@@ -153,6 +153,32 @@ Co zostało zrobione:
 - rejestr miast z oficjalnymi shapefile (`config/official_sources.yaml` z planu) — nie zrobiony, na razie tylko Kraków ma `quality: official`,
 - `--all` (wszystkie ~2500 gmin) nie zostało uruchomione — to zadanie na wiele godzin obliczeń i osobną decyzję o zakresie (Etap 5/6).
 
+### 7. Kafelki wektorowe: PMTiles + MapLibre GL (Etap 5, działający)
+
+Pliki: [`scripts/build_tiles.py`](scripts/build_tiles.py) (nowy), przepisany [`frontend/public/app.js`](frontend/public/app.js) i [`frontend/public/index.html`](frontend/public/index.html)
+
+**Narzędzia:** `tippecanoe` niedostępny przez Homebrew na tej maszynie (brak brew) — zbudowany ze źródeł (`github.com/felt/tippecanoe`, `make`, wymaga tylko Xcode CLT) i zainstalowany do `~/.local/bin` (dodane do `PATH` w `~/.zshrc`).
+
+Co zostało zrobione:
+- **`build_tiles.py`** — kluczowa decyzja architektoniczna: **geometria i wyniki są rozdzielone**. Geometria (Kraków + 20 wygenerowanych gmin, właściwości ograniczone do `key`/`teryt`/`obwod`/`quality`) trafia do jednego `frontend/public/data/obwody.pmtiles` (kafelki `-zg`, automatyczny dobór zoomu). Wyniki per wybory eksportowane osobno do `results_{election_id}.json` (mapa `"{teryt}_{obwod}"` → `{frekwencja, winner, results, komisja, dzielnica}`), budowane ze wszystkich `areas` w manifeście. Dzięki temu dodanie nowych wyborów nie wymaga przebudowy kafelków.
+- **Frontend przepisany na MapLibre GL + protokół `pmtiles`** (biblioteki z CDN, tło nadal proste kafelki rastrowe OSM). Leaflet usunięty.
+- **Automatyczne przełączanie gminy↔obwody wg zoomu** — natywne `minzoom`/`maxzoom` na warstwach (próg `zoom 9`), zamiast ręcznego przełączania trybu jak w Etapie 3. Wyniki per obwód wstrzykiwane jako `feature-state` (klucz `key = "{teryt}_{obwod}"` przez `promoteId`), więc kafelki nie muszą znać wyników w momencie budowy.
+- Przycisk „Pokaż obwody” / „Powrót do mapy Polski” zachowane jako wygodne skróty (`flyTo`/`jumpTo`), ale nie są już jedynym sposobem nawigacji — zwykłe przybliżenie mapy też przełącza widok.
+- Statystyki boczne pokazują teraz **oba poziomy jednocześnie**: agregat krajowy (zawsze) + „widok obwodowy (na ekranie)” liczony z aktualnie widocznych kafli, gdy zoom ≥ 9.
+
+**Napotkane i naprawione problemy (wszystkie potwierdzone w headless Chrome, nie tylko czytane z kodu):**
+- MapLibre interpoluje kolory liniowo w przestrzeni RGB między przystankami `interpolate`, a nie przez obrót odcieniem HSL jak stary wzór z Leaflet — dawało to brudny, nieczytelny gradient. Naprawiono generując 11 pośrednich przystanków tym samym wzorem HSL, żeby lokalna interpolacja RGB dobrze przybliżała łuk.
+- Plik `data/generated/126101.geojson` (artefakt walidacji generatora PRG dla Krakowa z Etapu 4.4) kolidował z oficjalną geometrią MSIP w kafelkach (ten sam `key`, różne `quality`) — `build_tiles.py` jawnie pomija Kraków przy skanowaniu `data/generated/`.
+- Statystyki „widok obwodowy” wymagają zdarzenia `idle` (kafelki wektorowe ładują się asynchronicznie) — samo `zoomend`/`moveend` czasem odpalało się przed wyrenderowaniem kafli.
+- `renderStats()` zakładało, że `currentElection.country` zawsze istnieje — rzucało wyjątkiem dla `samorzad2024` (`country: null`), po cichu psując też `updateContext()` wywoływane zaraz po. Naprawione (blok krajowy renderowany warunkowo).
+- Wyrażenie `match` dla koloru „zwycięzca” bez żadnych zwycięzców (pusta lista) jest nieprawidłowe składniowo w MapLibre (`match` wymaga ≥4 argumentów) — dodano fallback do stałego koloru.
+- `loadElection()` nie miało zabezpieczenia przed race condition przy szybkim przełączaniu wyborów (odpowiedź z wolniejszego, starszego żądania mogła nadpisać nowszy stan) — dodano token wersji odrzucający nieaktualne odpowiedzi; dodano też `.catch` na handlerze `change`, żeby błędy nie ginęły cicho.
+- Lokalny serwer testowy (`python -m http.server`) nie obsługuje HTTP Range requests wymaganych przez PMTiles (biblioteka `pmtiles.js` jawnie to wykrywa i zgłasza błąd zamiast ciszej degradacji) — do lokalnych testów napisano prosty serwer z obsługą Range; docelowy hosting (GitHub Pages, Etap 6) obsługuje Range natywnie.
+
+**Wciąż otwarte:**
+- kafelki dziś obejmują tylko 21 gmin (Kraków + pierwsza fala z Etapu 4) — reszta Polski nadal widoczna tylko na poziomie gmin, zgodnie z planem (docelowo `--all` z Etapu 4 zasili też kafelki bez zmian w `build_tiles.py`),
+- brak testu z realnie pełną Polską na poziomie obwodów (~31,5 tys.) — rozmiar `obwody.pmtiles` przy obecnych 698 obwodach to 0,37 MB; szacunek „kilkadziesiąt-150 MB" dla całego kraju z planu pozostaje niesprawdzony.
+
 ---
 
 ## Kluczowe ustalenia techniczne
@@ -185,15 +211,16 @@ mapa_obwodow/
 │   ├── build_dataset.py           # ETL: MSIP + PKW → GeoJSON per miasto (Kraków)
 │   ├── build_gminy.py             # agregacja krajowa wyników per gmina
 │   ├── generate_boundaries.py     # batch generator granic (PRG) dla dowolnych gmin
+│   ├── build_tiles.py             # kafelki PMTiles (geometria) + results_{election}.json
 │   ├── utils.py                   # pobieranie, normalizacja TERYT, CSV
 │   ├── parse_opis_granic.py       # parser Opis granic
 │   ├── fetch_addresses_osm.py     # adresy z OSM (pilot/fallback)
 │   ├── fetch_addresses_prg.py     # adresy z PRG/GUGiK (WFS)
 │   └── run_pilot.py               # pilot Bolesławiec + Kraków, funkcje reużywane przez generator
 ├── frontend/
-│   └── public/                    # jedyna, statyczna wersja aplikacji
+│   └── public/                    # jedyna, statyczna wersja aplikacji (MapLibre GL + PMTiles)
 │       ├── index.html, app.js, styles.css
-│       └── data/                  # manifest.json (v2) + gminy_*.geojson + *.geojson (miasta)
+│       └── data/                  # manifest.json (v2), obwody.pmtiles, gminy_*.geojson, results_*.json
 ├── requirements.txt
 ├── README.md
 └── STAN_PROJEKTU.md               # ten plik
@@ -202,8 +229,6 @@ mapa_obwodow/
 ---
 
 ## Najbliższe kroki (rekomendowana kolejność — patrz pełny plan)
-
-### Etap 5 — skala ogólnopolska (PMTiles + MapLibre GL)
 
 ### Etap 6 — publikacja (GitHub Pages) i szlif UX
 
@@ -235,4 +260,4 @@ mapa_obwodow/
 
 ## Podsumowanie jednym zdaniem
 
-**Aplikacja pokazuje całą Polskę jako kartogram 2479 gmin, a klikalny szczegółowy widok obwodów (z badge'em jakości granic) działa dziś dla 21 miast: Krakowa z oficjalnymi granicami MSIP oraz 20 miast średniej wielkości z automatycznie wygenerowanymi granicami (PRG + Voronoi, 14 „dobrej jakości”, 6 „przybliżonych”). Generator PRG wyraźnie przebił wcześniejszy pilot na OSM (Kraków: 74,5%→87,6% przypisanych adresów, IoU 0,569→0,6033). Dalsze skalowanie na resztę ~2500 gmin i poziom kafelków wektorowych to Etap 5-6. Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
+**Aplikacja pokazuje całą Polskę jako kartogram 2479 gmin i płynnie (bez przeładowań) przełącza się na kafelki wektorowe (PMTiles + MapLibre GL) po przybliżeniu do jednego z 21 miast z poligonami obwodów: Krakowa (oficjalne granice MSIP) oraz 20 miast średniej wielkości z automatycznie wygenerowanymi granicami (PRG + Voronoi, 14 „dobrej jakości”, 6 „przybliżonych”). Generator PRG wyraźnie przebił wcześniejszy pilot na OSM (Kraków: 74,5%→87,6% przypisanych adresów, IoU 0,569→0,6033). Architektura (geometria i wyniki rozdzielone) jest gotowa na skalowanie do pełnej Polski — brakuje tylko wygenerowania większej liczby gmin (Etap 4 `--all`) i publikacji (Etap 6). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
