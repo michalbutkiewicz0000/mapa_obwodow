@@ -22,6 +22,266 @@
           "quality": "official",
           "matched": 411,
           "total": 411
+        },
+        {
+          "name": "Przasnysz",
+          "teryt": "142201",
+          "file": "sejm2023_142201.geojson",
+          "center": [
+            53.0185,
+            20.885
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Hrubieszów",
+          "teryt": "060401",
+          "file": "sejm2023_060401.geojson",
+          "center": [
+            50.8088,
+            23.889
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 12
+        },
+        {
+          "name": "Biłgoraj",
+          "teryt": "060201",
+          "file": "sejm2023_060201.geojson",
+          "center": [
+            50.5392,
+            22.7115
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Koło",
+          "teryt": "300901",
+          "file": "sejm2023_300901.geojson",
+          "center": [
+            52.1992,
+            18.6354
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Sandomierz",
+          "teryt": "260901",
+          "file": "sejm2023_260901.geojson",
+          "center": [
+            50.6796,
+            21.7471
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 13,
+          "total": 13
+        },
+        {
+          "name": "Hajnówka",
+          "teryt": "200501",
+          "file": "sejm2023_200501.geojson",
+          "center": [
+            52.7321,
+            23.5763
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Limanowa",
+          "teryt": "120701",
+          "file": "sejm2023_120701.geojson",
+          "center": [
+            49.7149,
+            20.4103
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 10,
+          "total": 10
+        },
+        {
+          "name": "Sierpc",
+          "teryt": "142701",
+          "file": "sejm2023_142701.geojson",
+          "center": [
+            52.8532,
+            19.6649
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Kętrzyn",
+          "teryt": "280801",
+          "file": "sejm2023_280801.geojson",
+          "center": [
+            54.0822,
+            21.3765
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Garwolin",
+          "teryt": "140301",
+          "file": "sejm2023_140301.geojson",
+          "center": [
+            51.8971,
+            21.6232
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Świebodzice",
+          "teryt": "021902",
+          "file": "sejm2023_021902.geojson",
+          "center": [
+            50.8724,
+            16.3385
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 15
+        },
+        {
+          "name": "Bochnia",
+          "teryt": "120101",
+          "file": "sejm2023_120101.geojson",
+          "center": [
+            49.9742,
+            20.4292
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 15,
+          "total": 15
+        },
+        {
+          "name": "Białogard",
+          "teryt": "320101",
+          "file": "sejm2023_320101.geojson",
+          "center": [
+            54.0148,
+            15.9756
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Krasnystaw",
+          "teryt": "060601",
+          "file": "sejm2023_060601.geojson",
+          "center": [
+            50.9916,
+            23.1698
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Nowa Sól",
+          "teryt": "080401",
+          "file": "sejm2023_080401.geojson",
+          "center": [
+            51.8033,
+            15.7118
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Ostróda",
+          "teryt": "281501",
+          "file": "sejm2023_281501.geojson",
+          "center": [
+            53.7028,
+            19.9558
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Oława",
+          "teryt": "021501",
+          "file": "sejm2023_021501.geojson",
+          "center": [
+            50.9576,
+            17.2935
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Szczytno",
+          "teryt": "281701",
+          "file": "sejm2023_281701.geojson",
+          "center": [
+            53.5641,
+            20.9976
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Żywiec",
+          "teryt": "241701",
+          "file": "sejm2023_241701.geojson",
+          "center": [
+            49.7064,
+            19.2096
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 18,
+          "total": 18
+        },
+        {
+          "name": "Rumia",
+          "teryt": "221502",
+          "file": "sejm2023_221502.geojson",
+          "center": [
+            54.5692,
+            18.3854
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 20,
+          "total": 20
         }
       ]
     },
@@ -67,6 +327,266 @@
           "quality": "official",
           "matched": 412,
           "total": 412
+        },
+        {
+          "name": "Przasnysz",
+          "teryt": "142201",
+          "file": "prez2025_t1_142201.geojson",
+          "center": [
+            53.0185,
+            20.885
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Hrubieszów",
+          "teryt": "060401",
+          "file": "prez2025_t1_060401.geojson",
+          "center": [
+            50.8088,
+            23.889
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 12
+        },
+        {
+          "name": "Biłgoraj",
+          "teryt": "060201",
+          "file": "prez2025_t1_060201.geojson",
+          "center": [
+            50.5392,
+            22.7115
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Koło",
+          "teryt": "300901",
+          "file": "prez2025_t1_300901.geojson",
+          "center": [
+            52.1992,
+            18.6354
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Sandomierz",
+          "teryt": "260901",
+          "file": "prez2025_t1_260901.geojson",
+          "center": [
+            50.6796,
+            21.7471
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 13,
+          "total": 13
+        },
+        {
+          "name": "Hajnówka",
+          "teryt": "200501",
+          "file": "prez2025_t1_200501.geojson",
+          "center": [
+            52.7321,
+            23.5763
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Limanowa",
+          "teryt": "120701",
+          "file": "prez2025_t1_120701.geojson",
+          "center": [
+            49.7149,
+            20.4103
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 10,
+          "total": 10
+        },
+        {
+          "name": "Sierpc",
+          "teryt": "142701",
+          "file": "prez2025_t1_142701.geojson",
+          "center": [
+            52.8532,
+            19.6649
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Kętrzyn",
+          "teryt": "280801",
+          "file": "prez2025_t1_280801.geojson",
+          "center": [
+            54.0822,
+            21.3765
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Garwolin",
+          "teryt": "140301",
+          "file": "prez2025_t1_140301.geojson",
+          "center": [
+            51.8971,
+            21.6232
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Świebodzice",
+          "teryt": "021902",
+          "file": "prez2025_t1_021902.geojson",
+          "center": [
+            50.8724,
+            16.3385
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 15
+        },
+        {
+          "name": "Bochnia",
+          "teryt": "120101",
+          "file": "prez2025_t1_120101.geojson",
+          "center": [
+            49.9742,
+            20.4292
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 15,
+          "total": 15
+        },
+        {
+          "name": "Białogard",
+          "teryt": "320101",
+          "file": "prez2025_t1_320101.geojson",
+          "center": [
+            54.0148,
+            15.9756
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Krasnystaw",
+          "teryt": "060601",
+          "file": "prez2025_t1_060601.geojson",
+          "center": [
+            50.9916,
+            23.1698
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Nowa Sól",
+          "teryt": "080401",
+          "file": "prez2025_t1_080401.geojson",
+          "center": [
+            51.8033,
+            15.7118
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Ostróda",
+          "teryt": "281501",
+          "file": "prez2025_t1_281501.geojson",
+          "center": [
+            53.7028,
+            19.9558
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Oława",
+          "teryt": "021501",
+          "file": "prez2025_t1_021501.geojson",
+          "center": [
+            50.9576,
+            17.2935
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Szczytno",
+          "teryt": "281701",
+          "file": "prez2025_t1_281701.geojson",
+          "center": [
+            53.5641,
+            20.9976
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Żywiec",
+          "teryt": "241701",
+          "file": "prez2025_t1_241701.geojson",
+          "center": [
+            49.7064,
+            19.2096
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 18,
+          "total": 18
+        },
+        {
+          "name": "Rumia",
+          "teryt": "221502",
+          "file": "prez2025_t1_221502.geojson",
+          "center": [
+            54.5692,
+            18.3854
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 20,
+          "total": 20
         }
       ]
     },
@@ -92,6 +612,266 @@
           "quality": "official",
           "matched": 412,
           "total": 412
+        },
+        {
+          "name": "Przasnysz",
+          "teryt": "142201",
+          "file": "prez2025_t2_142201.geojson",
+          "center": [
+            53.0185,
+            20.885
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Hrubieszów",
+          "teryt": "060401",
+          "file": "prez2025_t2_060401.geojson",
+          "center": [
+            50.8088,
+            23.889
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 12
+        },
+        {
+          "name": "Biłgoraj",
+          "teryt": "060201",
+          "file": "prez2025_t2_060201.geojson",
+          "center": [
+            50.5392,
+            22.7115
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Koło",
+          "teryt": "300901",
+          "file": "prez2025_t2_300901.geojson",
+          "center": [
+            52.1992,
+            18.6354
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Sandomierz",
+          "teryt": "260901",
+          "file": "prez2025_t2_260901.geojson",
+          "center": [
+            50.6796,
+            21.7471
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 13,
+          "total": 13
+        },
+        {
+          "name": "Hajnówka",
+          "teryt": "200501",
+          "file": "prez2025_t2_200501.geojson",
+          "center": [
+            52.7321,
+            23.5763
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 12,
+          "total": 12
+        },
+        {
+          "name": "Limanowa",
+          "teryt": "120701",
+          "file": "prez2025_t2_120701.geojson",
+          "center": [
+            49.7149,
+            20.4103
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 10,
+          "total": 10
+        },
+        {
+          "name": "Sierpc",
+          "teryt": "142701",
+          "file": "prez2025_t2_142701.geojson",
+          "center": [
+            52.8532,
+            19.6649
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Kętrzyn",
+          "teryt": "280801",
+          "file": "prez2025_t2_280801.geojson",
+          "center": [
+            54.0822,
+            21.3765
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Garwolin",
+          "teryt": "140301",
+          "file": "prez2025_t2_140301.geojson",
+          "center": [
+            51.8971,
+            21.6232
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Świebodzice",
+          "teryt": "021902",
+          "file": "prez2025_t2_021902.geojson",
+          "center": [
+            50.8724,
+            16.3385
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 15
+        },
+        {
+          "name": "Bochnia",
+          "teryt": "120101",
+          "file": "prez2025_t2_120101.geojson",
+          "center": [
+            49.9742,
+            20.4292
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 15,
+          "total": 15
+        },
+        {
+          "name": "Białogard",
+          "teryt": "320101",
+          "file": "prez2025_t2_320101.geojson",
+          "center": [
+            54.0148,
+            15.9756
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 14,
+          "total": 14
+        },
+        {
+          "name": "Krasnystaw",
+          "teryt": "060601",
+          "file": "prez2025_t2_060601.geojson",
+          "center": [
+            50.9916,
+            23.1698
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 13
+        },
+        {
+          "name": "Nowa Sól",
+          "teryt": "080401",
+          "file": "prez2025_t2_080401.geojson",
+          "center": [
+            51.8033,
+            15.7118
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Ostróda",
+          "teryt": "281501",
+          "file": "prez2025_t2_281501.geojson",
+          "center": [
+            53.7028,
+            19.9558
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Oława",
+          "teryt": "021501",
+          "file": "prez2025_t2_021501.geojson",
+          "center": [
+            50.9576,
+            17.2935
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 0,
+          "total": 16
+        },
+        {
+          "name": "Szczytno",
+          "teryt": "281701",
+          "file": "prez2025_t2_281701.geojson",
+          "center": [
+            53.5641,
+            20.9976
+          ],
+          "zoom": 13,
+          "quality": "generated",
+          "matched": 17,
+          "total": 17
+        },
+        {
+          "name": "Żywiec",
+          "teryt": "241701",
+          "file": "prez2025_t2_241701.geojson",
+          "center": [
+            49.7064,
+            19.2096
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 18,
+          "total": 18
+        },
+        {
+          "name": "Rumia",
+          "teryt": "221502",
+          "file": "prez2025_t2_221502.geojson",
+          "center": [
+            54.5692,
+            18.3854
+          ],
+          "zoom": 13,
+          "quality": "approximate",
+          "matched": 20,
+          "total": 20
         }
       ]
     }

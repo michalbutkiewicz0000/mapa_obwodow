@@ -16,6 +16,25 @@ let currentElection = null; // wpis z manifest.elections
 let viewMode = "country"; // "country" | "area"
 let currentArea = null;
 
+const QUALITY_LABELS = {
+  official: "granice oficjalne (MSIP)",
+  generated: "granice wygenerowane — dobra jakość",
+  approximate: "granice wygenerowane — przybliżone",
+};
+
+const QUALITY_CLASSES = {
+  official: "quality-official",
+  generated: "quality-generated",
+  approximate: "quality-approximate",
+};
+
+function qualityBadge(quality) {
+  if (!quality) return "";
+  const label = QUALITY_LABELS[quality] || quality;
+  const cls = QUALITY_CLASSES[quality] || "";
+  return `<span class="quality-badge ${cls}">${label}</span>`;
+}
+
 function winnerColor(winner) {
   if (!winner) return "#cccccc";
   return PARTY_COLORS[winner] || colorFromString(winner);
@@ -146,6 +165,7 @@ function bindGminaPopup(feature, mapLayer) {
     <p><strong>Obwody:</strong> ${props.obwody ?? "—"}</p>
     ${resultLines ? `<ul>${resultLines}</ul>` : ""}
     ${area ? `<button type="button" class="show-area-btn">Pokaż obwody →</button>` : ""}
+    ${area ? qualityBadge(area.quality) : ""}
   `;
   if (area) {
     popupNode.querySelector(".show-area-btn").addEventListener("click", () => {
@@ -171,6 +191,7 @@ function bindObwodPopup(feature, mapLayer) {
       ${props.winner ? `<p><strong>Zwycięzca:</strong> ${props.winner}</p>` : ""}
       ${props.komisja ? `<p><strong>Komisja:</strong> ${props.komisja}</p>` : ""}
       ${resultLines ? `<ul>${resultLines}</ul>` : ""}
+      ${currentArea && currentArea.quality !== "official" ? `<p class="quality-note">${qualityBadge(currentArea.quality)}<br>Kształt tego obwodu jest przybliżony (wygenerowany z opisu granic PKW i punktów adresowych, nie z oficjalnego geoportalu).</p>` : ""}
     </div>
   `);
 }
@@ -214,7 +235,7 @@ async function loadArea(area) {
   viewMode = "area";
   currentArea = area;
   document.getElementById("back-to-country").style.display = currentElection.country ? "block" : "none";
-  document.getElementById("context-name").textContent = area.name;
+  document.getElementById("context-name").innerHTML = `${area.name} ${qualityBadge(area.quality)}`;
 
   const response = await fetch(`data/${area.file}`);
   if (!response.ok) throw new Error("Brak danych GeoJSON (obwody)");

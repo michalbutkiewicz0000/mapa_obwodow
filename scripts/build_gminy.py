@@ -25,12 +25,16 @@ SIMPLIFY_TOLERANCE = 0.003  # ~2.8 MB dla 2479 gmin, wystarczające dla widoku k
 COUNTRY_ELECTIONS = {"sejm2023", "prez2025_t1", "prez2025_t2"}
 
 
-def load_gmina_boundaries() -> gpd.GeoDataFrame:
+def load_gmina_boundaries(simplify: float | None = SIMPLIFY_TOLERANCE) -> gpd.GeoDataFrame:
+    """Granice gmin. `simplify=None` zwraca pełną geometrię (do precyzyjnego
+    przycinania Voronoi w generatorze); domyślna tolerancja jest dobra dla
+    lekkiego widoku krajowego."""
     download(GMINY_GEOJSON_URL, GMINY_RAW_PATH)
     gdf = gpd.read_file(GMINY_RAW_PATH).to_crs(epsg=4326)
     gdf["teryt"] = gdf["JPT_KOD_JE"].astype(str).str[:6]
     gdf["gmina_nazwa"] = gdf["JPT_NAZWA_"]
-    gdf["geometry"] = gdf.geometry.simplify(SIMPLIFY_TOLERANCE, preserve_topology=True)
+    if simplify is not None:
+        gdf["geometry"] = gdf.geometry.simplify(simplify, preserve_topology=True)
     return gdf[["teryt", "gmina_nazwa", "geometry"]]
 
 

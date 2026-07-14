@@ -71,15 +71,19 @@ def build_rules(subset: pd.DataFrame) -> list:
     return rules
 
 
-def _assign_chunk(args: tuple[list[tuple[str, object]], list]) -> list[tuple[object, int]]:
+def _assign_chunk(args: tuple[list[tuple[str, object, object]], list]) -> list[tuple[object, int]]:
     rows, rules_list = args
-    return [resolve_obwod(rules_list, street, number) for street, number in rows]
+    return [resolve_obwod(rules_list, street, number, village) for street, number, village in rows]
 
 
 def assign_addresses(addresses: gpd.GeoDataFrame, rules_list: list) -> gpd.GeoDataFrame:
+    """Przypisuje adresy do obwodów. Jeśli `addresses` ma kolumnę `miejscowosc`
+    (dane PRG), jest ona przekazywana jako village do dopasowania wsi — dane OSM
+    nie mają tej kolumny, więc village pozostaje None (tylko dopasowanie ulic)."""
     assigned = addresses.copy()
     total = len(assigned)
-    rows = list(zip(assigned["street"], assigned["number"]))
+    village_col = assigned["miejscowosc"] if "miejscowosc" in assigned.columns else pd.Series([None] * total)
+    rows = list(zip(assigned["street"], assigned["number"], village_col))
 
     workers = min(os.cpu_count() or 1, 10)
     if total < 2000 or workers <= 1:

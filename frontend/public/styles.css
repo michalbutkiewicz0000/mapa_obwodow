@@ -95,6 +95,37 @@ select {
   background: #555;
 }
 
+.quality-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.quality-official {
+  background: #dff0d8;
+  color: #2f6e3f;
+}
+
+.quality-generated {
+  background: #fff3cd;
+  color: #8a6d1e;
+}
+
+.quality-approximate {
+  background: #f8d7da;
+  color: #a33;
+}
+
+.quality-note {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: #666;
+}
+
 .legend {
   margin-top: 1.25rem;
 }

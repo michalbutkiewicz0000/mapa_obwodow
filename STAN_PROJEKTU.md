@@ -128,6 +128,31 @@ Co zostało zrobione:
 - **Frontend — widok hybrydowy**: start pokazuje mapę Polski (gminy), popup gminy ma przycisk „Pokaż obwody →” (widoczny tylko dla gmin z dopasowanym `area.teryt`, dziś tylko Kraków), po kliknięciu ładuje się widok obwodowy z przyciskiem powrotu. Legenda trybu „zwycięzca” buduje się dynamicznie z danych — działa identycznie dla partii, kandydatów i lokalnych komitetów.
 - Zweryfikowano end-to-end w headless Chrome (CDP): render mapy Polski, klik w gminę → popup → „Pokaż obwody” → widok Krakowa → powrót, przełączanie wyborów (w tym samorzad2024 bez widoku krajowego), oba tryby kolorowania — bez błędów w konsoli.
 
+### 6. PRG zamiast OSM i generator granic dla wielu gmin (Etap 4, działający)
+
+Pliki: [`scripts/fetch_addresses_prg.py`](scripts/fetch_addresses_prg.py) (nowy), [`scripts/generate_boundaries.py`](scripts/generate_boundaries.py) (nowy), zmiany w [`scripts/run_pilot.py`](scripts/run_pilot.py), [`scripts/build_gminy.py`](scripts/build_gminy.py)
+
+Co zostało zrobione:
+- **`fetch_addresses_prg.py`** — pobiera oficjalne punkty adresowe z usługi WFS GUGiK „Krajowa Integracja Numeracji Adresowej” (`mapy.geoportal.gov.pl/wss/ext/KrajowaIntegracjaNumeracjiAdresowej`, warstwa `ms:prg-adresy`), filtrowane po `teryt` (ten sam 6-cyfrowy format co PKW!) przez OGC Filter XML, stronicowane po 10 000 rekordów. Wynik ma ten sam schemat co dane OSM (`street`, `number`, `housenumber`, `lat`, `lon`) plus `miejscowosc` dla dopasowania wsi — `run_pilot.assign_addresses` reużyty bez zmian (dodano tylko opcjonalne przekazanie `village`).
+- **`generate_boundaries.py`** — batch generator: `--teryt <lista>` lub `--all [--limit N]`. Dla każdej gminy: reguły z Excela → adresy PRG → przypisanie (równoległe, jak w pilocie) → Voronoi przycięty do pełnej (nieuproszczonej) granicy gminy z Etapu 3 → GeoJSON w `data/generated/{teryt}.geojson`. Dodatkowo łączy poligony z wynikami wyborów o pełnym pokryciu krajowym i eksportuje `frontend/public/data/{election_id}_{teryt}.geojson` gotowe do wpięcia jako `area`.
+- **Walidacja Krakowa (PRG vs OSM, ta sama metodyka co Etap 2):**
+
+  | Metryka | OSM (Etap 2 po poprawkach) | PRG (Etap 4) |
+  |---|---|---|
+  | Adresy przypisane | 74,5% (70847/95057) | **87,6% (61352/70012)** |
+  | Obwody z punktami | 340/454 | **381/454** |
+  | Średnie IoU vs MSIP | 0,569 | **0,6033** |
+
+  PRG ma mniej, ale czystszych punktów (70k vs 95k) i wyraźnie lepszą jakość geometrii.
+- **Progi jakości (`official`/`generated`/`approximate`) oparte tylko o `assignment_rate`** (≥90% / ≥70% / niżej) — pierwotny plan zakładał też „0 brakujących obwodów”, ale w praktyce niemal każda gmina ma 1-3 obwody czysto instytucjonalne (szpital, więzienie, dom opieki) bez adresów ulicznych w PRG; ich brak nie świadczy o gorszej jakości granic, więc próg go pomija.
+- **Pierwsza fala: 20 miast średniej wielkości** (15-21 obwodów, różne województwa) wygenerowane i wpięte do `manifest.json` dla sejm2023 i prez2025 (I/II tura): **14 „generated”, 6 „approximate”**, 0 błędów krytycznych. Lista z wynikami w `data/generated/quality.json`.
+- **UI**: badge jakości przy nazwie obszaru (`Kraków — granice oficjalne (MSIP)` / `Przasnysz — granice wygenerowane — dobra jakość` itd.) i w popupie gminy przed kliknięciem „Pokaż obwody”; nota ostrzegawcza w popupie obwodu dla granic niebędących `official`. Zweryfikowano wizualnie w headless Chrome.
+
+**Wciąż otwarte:**
+- reguły parsera nadal ograniczają jakość w miastach o gęstej, powtarzalnej siatce ulic (Kraków pozostaje najtrudniejszym przypadkiem mimo poprawy),
+- rejestr miast z oficjalnymi shapefile (`config/official_sources.yaml` z planu) — nie zrobiony, na razie tylko Kraków ma `quality: official`,
+- `--all` (wszystkie ~2500 gmin) nie zostało uruchomione — to zadanie na wiele godzin obliczeń i osobną decyzję o zakresie (Etap 5/6).
+
 ---
 
 ## Kluczowe ustalenia techniczne
@@ -153,15 +178,18 @@ mapa_obwodow/
 ├── config/elections.yaml          # konfiguracja Krakowa i wyborów
 ├── data/
 │   ├── metadata/                  # Excel PKW (w repo)
-│   ├── raw/                       # pobrane ZIP/shapefile/CSV (gitignore)
-│   └── pilot/                     # wyniki pilota (Bolesławiec + Kraków)
+│   ├── raw/                       # pobrane ZIP/shapefile/CSV/PRG (gitignore)
+│   ├── pilot/                     # wyniki pilota (Bolesławiec + Kraków, OSM)
+│   └── generated/                 # poligony z generate_boundaries.py (PRG) + quality.json
 ├── scripts/
 │   ├── build_dataset.py           # ETL: MSIP + PKW → GeoJSON per miasto (Kraków)
 │   ├── build_gminy.py             # agregacja krajowa wyników per gmina
+│   ├── generate_boundaries.py     # batch generator granic (PRG) dla dowolnych gmin
 │   ├── utils.py                   # pobieranie, normalizacja TERYT, CSV
-│   ├── parse_opis_granic.py       # parser Opis granic (pilot)
-│   ├── fetch_addresses_osm.py     # adresy z OSM (pilot)
-│   └── run_pilot.py               # uruchomienie pilota Bolesławiec + Kraków
+│   ├── parse_opis_granic.py       # parser Opis granic
+│   ├── fetch_addresses_osm.py     # adresy z OSM (pilot/fallback)
+│   ├── fetch_addresses_prg.py     # adresy z PRG/GUGiK (WFS)
+│   └── run_pilot.py               # pilot Bolesławiec + Kraków, funkcje reużywane przez generator
 ├── frontend/
 │   └── public/                    # jedyna, statyczna wersja aplikacji
 │       ├── index.html, app.js, styles.css
@@ -174,11 +202,6 @@ mapa_obwodow/
 ---
 
 ## Najbliższe kroki (rekomendowana kolejność — patrz pełny plan)
-
-### Etap 4 — PRG zamiast OSM, generator dla wielu gmin
-
-- `scripts/fetch_addresses_prg.py` — oficjalne punkty adresowe GUGiK zamiast OSM.
-- `scripts/generate_boundaries.py` — batch generator z flagą jakości (`official`/`generated`/`approximate`).
 
 ### Etap 5 — skala ogólnopolska (PMTiles + MapLibre GL)
 
@@ -204,12 +227,12 @@ mapa_obwodow/
 | Wyniki wyborów | [wybory.gov.pl](https://wybory.gov.pl/) → Dane w arkuszach (CSV ZIP) | używane |
 | Wyniki prez2025 | `prezydent2025.pkw.gov.pl/pl/dane_w_arkuszach` (ręczne pobranie) | używane |
 | Metadane obwodów | Excel PKW (`data/metadata/obwody_glosowania_utf8.xlsx`) | używane |
-| Adresy w pilocie | OpenStreetMap (Overpass) | tymczasowo |
-| Adresy docelowo | PRG / Geoportal GUGiK | planowane |
-| Granice gmin (widok krajowy) | [waszkiewiczja/GeoJSON-Polska-...-Gminy](https://github.com/waszkiewiczja/GeoJSON-Polska-Wojewodztwa-Powiaty-Gminy) (domena publiczna) | używane |
+| Adresy (generator, docelowe) | [PRG/GUGiK WFS](https://mapy.geoportal.gov.pl/wss/ext/KrajowaIntegracjaNumeracjiAdresowej) („Krajowa Integracja Numeracji Adresowej") | używane |
+| Adresy (pilot, historyczne) | OpenStreetMap (Overpass) | zastąpione przez PRG |
+| Granice gmin (widok krajowy i przycinanie Voronoi) | [waszkiewiczja/GeoJSON-Polska-...-Gminy](https://github.com/waszkiewiczja/GeoJSON-Polska-Wojewodztwa-Powiaty-Gminy) (domena publiczna) | używane |
 
 ---
 
 ## Podsumowanie jednym zdaniem
 
-**Aplikacja pokazuje teraz całą Polskę: mapa startuje jako kartogram 2479 gmin (frekwencja/zwycięzca) dla wyborów z pełnym pokryciem krajowym (sejm2023, prez2025 I/II tura), z Krakowa wciąż dostępny szczegółowy widok 411 obwodów z oficjalnymi granicami MSIP (przycisk „Pokaż obwody” w popupie gminy). Pilot generatora granic z opisu PKW ma pełny raport z poprawą po korektach parsera (Kraków: 53,9%→74,5% przypisanych adresów, IoU 0,172→0,569). Dalsze skalowanie na poziom obwodów w całym kraju wymaga PRG zamiast OSM (Etap 4) i kafelków wektorowych (Etap 5). Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
+**Aplikacja pokazuje całą Polskę jako kartogram 2479 gmin, a klikalny szczegółowy widok obwodów (z badge'em jakości granic) działa dziś dla 21 miast: Krakowa z oficjalnymi granicami MSIP oraz 20 miast średniej wielkości z automatycznie wygenerowanymi granicami (PRG + Voronoi, 14 „dobrej jakości”, 6 „przybliżonych”). Generator PRG wyraźnie przebił wcześniejszy pilot na OSM (Kraków: 74,5%→87,6% przypisanych adresów, IoU 0,569→0,6033). Dalsze skalowanie na resztę ~2500 gmin i poziom kafelków wektorowych to Etap 5-6. Pełny plan wieloetapowy: `~/.claude/plans/przeanalizuj-dokladnie-caly-projekt-woolly-sparkle.md`.**
