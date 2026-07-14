@@ -48,8 +48,15 @@ WARSZAWA_AREA_TERYT = "146501"
 WARSZAWA_DZIELNICE_TERYT = [f"1465{n:02d}" for n in range(2, 20)]
 
 
-def load_excel() -> pd.DataFrame:
-    df = pd.read_excel(EXCEL_PATH)
+def load_excel(path: Path | str = EXCEL_PATH) -> pd.DataFrame:
+    """Wczytuje rejestr obwodów — domyślnie Excel PKW (styczeń 2024), ale też
+    CSV per-wyborcze publikowane na portalach typu prezydent2025.pkw.gov.pl
+    (te same kolumny, separator ";", kodowanie z BOM)."""
+    path = Path(path)
+    if path.suffix.lower() == ".csv":
+        df = pd.read_csv(path, sep=";", dtype=str, encoding="utf-8-sig")
+    else:
+        df = pd.read_excel(path)
     df["teryt"] = df["TERYT gminy"].map(normalize_teryt).str.zfill(6)
     df["obwod"] = df["Numer"].map(normalize_obwod)
     return df
@@ -149,6 +156,7 @@ def generate_for_teryt(
     excel: pd.DataFrame,
     gminy_boundaries: gpd.GeoDataFrame,
     national_results: dict[str, pd.DataFrame],
+    output_suffix: str | None = None,
 ) -> dict:
     print(f"\n=== Generowanie: {teryt} ===")
     rules_list, gmina_name, obwod_teryt, obwod_dzielnica = build_rules_for_gmina(excel, teryt)
@@ -175,8 +183,12 @@ def generate_for_teryt(
         polygons["dzielnica"] = polygons["obwod"].map(obwod_dzielnica)
 
     quality = quality_flag(report)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    geojson_path = OUTPUT_DIR / f"{teryt}.geojson"
+    # Rejestr innych wyborów (np. prez2025) daje inną geometrię dla tego samego
+    # teryt niż domyślny rejestr PKW — output_suffix trzyma je osobno, żeby nie
+    # nadpisywać artefaktu domyślnego przebiegu.
+    geojson_dir = OUTPUT_DIR / output_suffix if output_suffix else OUTPUT_DIR
+    geojson_dir.mkdir(parents=True, exist_ok=True)
+    geojson_path = geojson_dir / f"{teryt}.geojson"
     polygons.to_file(geojson_path, driver="GeoJSON")
     print(f"  Zapisano: {geojson_path} (jakość: {quality})")
 
@@ -221,9 +233,25 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="wszystkie gminy z Excela PKW")
     parser.add_argument("--limit", type=int, default=None, help="ogranicz liczbę gmin (z --all)")
     parser.add_argument("--no-manifest", action="store_true", help="nie wpinaj do manifest.json")
+    parser.add_argument(
+        "--registry",
+        default=None,
+        help="alternatywny rejestr obwodów (CSV/xlsx per wybory, np. prez2025) zamiast domyślnego Excela PKW",
+    )
+    parser.add_argument(
+        "--elections",
+        nargs="+",
+        default=None,
+        help="ogranicz aktualizację areas/manifestu do podanych ID wyborów (np. prez2025_t1 prez2025_t2)",
+    )
+    parser.add_argument(
+        "--suffix",
+        default=None,
+        help="podkatalog data/generated/{suffix}/ na surowe poligony (żeby nie nadpisać domyślnego przebiegu)",
+    )
     args = parser.parse_args()
 
-    excel = load_excel()
+    excel = load_excel(args.registry) if args.registry else load_excel()
 
     if args.all:
         teryty = sorted(excel["teryt"].dropna().unique())
@@ -240,24 +268,29 @@ def main() -> None:
 
     config = load_config()
     elections_by_id = {e["id"]: e for e in config["elections"]}
+    allowed_elections = set(args.elections) if args.elections else None
     print("Wczytywanie wyników ogólnopolskich (raz, dla wszystkich gmin)...")
     national_results = {
         election_id: load_national_results(elections_by_id[election_id])
         for election_id in COUNTRY_ELECTIONS
         if election_id in elections_by_id
+        and (allowed_elections is None or election_id in allowed_elections)
     }
 
     quality_report = []
     for teryt in teryty:
         try:
-            quality_report.append(generate_for_teryt(teryt, excel, gminy_boundaries, national_results))
+            quality_report.append(
+                generate_for_teryt(teryt, excel, gminy_boundaries, national_results, output_suffix=args.suffix)
+            )
         except Exception:
             print(f"Błąd dla {teryt}:", file=sys.stderr)
             traceback.print_exc()
             quality_report.append({"teryt": teryt, "quality": "failed", "error": traceback.format_exc()})
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    quality_path = OUTPUT_DIR / "quality.json"
+    quality_filename = f"quality_{args.suffix}.json" if args.suffix else "quality.json"
+    quality_path = OUTPUT_DIR / quality_filename
     quality_path.write_text(
         json.dumps(
             [{k: v for k, v in r.items() if k != "areas"} for r in quality_report],
