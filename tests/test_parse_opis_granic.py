@@ -1,5 +1,6 @@
 from parse_opis_granic import (
     NumberRange,
+    ObwodRules,
     StreetRule,
     normalize_text,
     parse_city_description,
@@ -128,6 +129,63 @@ def test_parse_opis_granic_wies_strips_type_prefix():
 
     rules_solectwo = parse_opis_granic(3, "wieś", "Sołectwo: Podgórze")
     assert rules_solectwo.villages == ["Podgórze"]
+
+
+def test_parse_opis_granic_wies_miejscowosci_plural_prefix():
+    # "miejscowo[śs][ćc]|miejscowo[śs]ci" w alternacji dawało dopasowanie tylko
+    # do krótszej l.poj. formy nawet dla tekstu w l.mn. ("Miejscowości: X"),
+    # zostawiając nieusunięty ogon "i: X" — regresja na literalny tekst z
+    # rejestru (gm. w województwie warmińsko-mazurskim).
+    rules = parse_opis_granic(1, "wieś", "Miejscowości: Henrykowo, Kadłubówka, Zasonie.")
+    assert rules.villages == ["Henrykowo", "Kadłubówka", "Zasonie"]
+
+
+def test_parse_opis_granic_wies_solectwo_groups_with_miejscowosci():
+    # Rejestr w części regionów (np. woj. kujawsko-pomorskie) grupuje wiele
+    # miejscowości pod sołectwem: "Sołectwo X (miejscowości: A, B)" — do
+    # dopasowania liczy się TYLKO lista w nawiasie (sołectwo to jednostka
+    # administracyjna, nie występuje jako PRG miejscowosc). Znaleziony przy
+    # próbie generowania granic dla całej Polski: 0.2% dopasowanych adresów
+    # dla gm. Gostycyn zanim to naprawiono.
+    rules = parse_opis_granic(
+        1,
+        "wieś",
+        "sołectwa: Wielki Mędromierz; Łyskowo (miejscowości: Łyskowo, Świt, Żółwiniec)",
+    )
+    assert rules.villages == ["Wielki Mędromierz", "Łyskowo", "Świt", "Żółwiniec"]
+
+    rules_comma_separated = parse_opis_granic(
+        2,
+        "wieś",
+        "sołectwa: Dębowo (miejscowości: Dębina, Dębowo, Sosnówiec), Kołodziejewo (miejscowości: Kołodziejewo, Pałuczyna)",
+    )
+    assert rules_comma_separated.villages == ["Dębina", "Dębowo", "Sosnówiec", "Kołodziejewo", "Pałuczyna"]
+
+
+def test_parse_opis_granic_wies_solectwo_with_ulice_is_hybrid():
+    # Rzadki hybrydowy format: "Sołectwo X-część, ulice: A, B, C" — sołectwo
+    # (prawdopodobnie niedopasowywalne) trafia do villages, a WSZYSTKIE ulice
+    # (nie tylko pierwsza po "ulice:") do streets — split_segments już rozbił
+    # je na osobne segmenty przecinkami, trzeba pamiętać tryb "jesteśmy w
+    # ulicach" między iteracjami.
+    rules = parse_opis_granic(1, "wieś", "sołectwo Gostycyn-część, ulice: Budnikowo, Główna, Krótka")
+    assert rules.villages == ["Gostycyn-część"]
+    names = [s.name for s in rules.streets]
+    assert names == ["Budnikowo", "Główna", "Krótka"]
+
+
+def test_match_specificity_checks_both_villages_and_streets():
+    # Wcześniejszy kod zwracał None natychmiast, gdy villages było niepuste a
+    # przekazana miejscowość się nie zgadzała — NIGDY nie sprawdzając streets,
+    # nawet jeśli oba pola były wypełnione (hybrydy sołectwo+ulice). Adres na
+    # pasującej ulicy w NIEPASUJĄCEJ miejscowości musi się nadal dopasować.
+    rules = ObwodRules(obwod=1, typ_obszaru="wieś", raw="")
+    rules.villages = ["Gostycyn-część"]
+    rules.streets = [StreetRule(name="Budnikowo")]
+
+    assert rules.match_specificity("Budnikowo", 5, village="Gostycyn") == 0
+    assert rules.match_specificity(None, None, village="Gostycyn-część") == 3
+    assert rules.match_specificity("Budnikowo", 5, village="Gostycyn-część") == 3
 
 
 def test_parse_opis_granic_miasto_streets():

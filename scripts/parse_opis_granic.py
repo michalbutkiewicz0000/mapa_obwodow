@@ -11,7 +11,11 @@ Parity = Literal["odd", "even", "all"]
 # ("wieś Boguszyn", "Sołectwo: X", "przysiółek Y") — do usunięcia przed
 # porównaniem z PRG/granicami gmin (patrz parse_opis_granic, gałąź "wieś").
 VILLAGE_PREFIX_RE = re.compile(
-    r"^(wie[śs]|kolonia|so[łl]ectwo|so[łl]ectwa|przysi[óo][łl]ek|osada|miejscowo[śs][ćc]|miejscowo[śs]ci)\s*:?\s*",
+    # "miejscowo[śs][ćc]i?" obejmuje jednym wzorcem l.poj. ("miejscowość") i l.mn.
+    # ("miejscowości") — osobne warianty w alternacji zawodziły, bo regex bierze
+    # pierwszą pasującą alternatywę na danej pozycji (krótszą, l.poj.), zostawiając
+    # nieusunięte "i:" z l.mn. jako śmieć na początku nazwy.
+    r"^(wie[śs]|kolonia|so[łl]ectwo|so[łl]ectwa|przysi[óo][łl]ek|osada|miejscowo[śs][ćc]i?)\s*:?\s*",
     re.I,
 )
 
@@ -73,15 +77,21 @@ class ObwodRules:
     def match_specificity(
         self, street: str | None, number: int | None, village: str | None = None
     ) -> int | None:
-        """Zwraca specyficzność najlepiej dopasowanej reguły, albo None jeśli brak dopasowania."""
-        if self.villages and village:
-            if any(villages_equal(v, village) for v in self.villages):
-                return 3
-            return None
+        """Zwraca specyficzność najlepiej dopasowanej reguły, albo None jeśli brak dopasowania.
+
+        Obwód może mieć jednocześnie villages i streets (rzadkie hybrydy typu
+        "sołectwo X-część, ulice: ...") — sprawdzamy oba i bierzemy lepsze
+        dopasowanie, zamiast przerywać na pierwszym niepasującym warunku
+        (wcześniejszy kod zwracał None od razu przy niedopasowanej wsi, nigdy
+        nie sprawdzając ulic, mimo że oba pola były wypełnione)."""
+        specs: list[int] = []
+        if self.villages and village and any(villages_equal(v, village) for v in self.villages):
+            specs.append(3)
         if self.streets and street:
-            specs = [rule.specificity() for rule in self.streets if rule.matches(street, number)]
-            return max(specs) if specs else None
-        return None
+            street_specs = [rule.specificity() for rule in self.streets if rule.matches(street, number)]
+            if street_specs:
+                specs.append(max(street_specs))
+        return max(specs) if specs else None
 
 
 def normalize_text(value: str) -> str:
@@ -325,6 +335,70 @@ def parse_warszawa_description(text: str) -> list[StreetRule]:
     return streets
 
 
+# "Sołectwo X (miejscowości: A, B, C)" — nazwa sołectwa przed nawiasem to
+# jednostka administracyjna, która nie występuje jako miejscowosc w PRG; do
+# dopasowania liczy się wyłącznie lista wewnątrz "(miejscowości: ...)".
+VILLAGE_GROUP_RE = re.compile(r"^(.*?)\(\s*miejscowo[śs]ci\s*:\s*(.*?)\s*\)\s*$", re.I)
+
+
+def parse_wies_description(text: str) -> tuple[list[str], list[StreetRule]]:
+    """Parsuje opis granic dla typ_obszaru "wieś". Formaty spotykane w rejestrze:
+    - prosta lista: "Nowa Wieś, Stara Wieś",
+    - z prefiksem typu miejscowości: "wieś X", "kolonia Y", "Sołectwo: Z",
+    - grupy sołectw z osobną listą miejscowości: "Sołectwa: A (miejscowości:
+      P, Q); B (miejscowości: R)" — separator ";" LUB ",", nawias chroni
+      wewnętrzną listę przed rozbiciem,
+    - fragmenty sołectwa z listą ulic: "Sołectwo X-część, ulice: A, B" — rzadkie,
+      ale spotykane; ulice trafiają do `streets`, nazwa sołectwa (jeśli coś
+      zostanie po odcięciu "-część"/prefiksu) do `villages` na wszelki wypadek.
+    """
+    villages: list[str] = []
+    streets: list[StreetRule] = []
+    # Po napotkaniu "ulice:" WSZYSTKIE kolejne segmenty (aż do końca opisu) są
+    # nazwami ulic, nie miejscowości — split_segments już rozbił je na osobne
+    # segmenty przecinkami, więc trzeba pamiętać ten stan między iteracjami,
+    # zamiast sprawdzać "ulice:" tylko w obrębie pojedynczego segmentu.
+    in_streets_mode = False
+
+    # Semicolon i przecinek pełnią tu tę samą rolę (separator grup na poziomie
+    # najwyższym) — normalizujemy do przecinka i używamy split_segments, który
+    # już respektuje głębokość nawiasów (patrz parser Warszawy).
+    for segment in split_segments(text.replace(";", ",")):
+        segment = segment.strip(" .")
+        if not segment:
+            continue
+
+        if in_streets_mode:
+            streets.append(StreetRule(name=segment))
+            continue
+
+        ulice_match = re.search(r"\bulice\s*:\s*", segment, re.I)
+        if ulice_match:
+            before = segment[: ulice_match.start()]
+            after = segment[ulice_match.end() :]
+            before = VILLAGE_PREFIX_RE.sub("", before.strip()).strip(" .-")
+            if before:
+                villages.append(before)
+            if after.strip():
+                streets.append(StreetRule(name=after.strip()))
+            in_streets_mode = True
+            continue
+
+        group_match = VILLAGE_GROUP_RE.match(segment)
+        if group_match:
+            for name in group_match.group(2).split(","):
+                name = VILLAGE_PREFIX_RE.sub("", name.strip()).strip(" .")
+                if name:
+                    villages.append(name)
+            continue
+
+        name = VILLAGE_PREFIX_RE.sub("", segment).strip(" .")
+        if name:
+            villages.append(name)
+
+    return villages, streets
+
+
 def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
     text = raw.strip()
     rules = ObwodRules(obwod=obwod, typ_obszaru=typ_obszaru, raw=text)
@@ -337,15 +411,12 @@ def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
         # dla większości gmin wiejskich w kraju — wykryte dopiero przy próbie
         # wygenerowania granic dla całej Polski, bo Kraków i 21 wcześniej
         # wygenerowanych miast są typu "miasto", nie dotykają tej gałęzi).
-        villages = []
-        for part in re.split(r",| i ", text):
-            part = part.strip()
-            if not part:
-                continue
-            part = VILLAGE_PREFIX_RE.sub("", part).strip()
-            if part:
-                villages.append(part)
+        # Niektóre regiony (~6% wpisów "wieś" w kraju) grupują miejscowości pod
+        # sołectwami z osobną listą w nawiasie ("Sołectwo X (miejscowości: A,
+        # B)") albo mieszają sołectwo z listą ulic — patrz parse_wies_description.
+        villages, streets = parse_wies_description(text)
         rules.villages = villages
+        rules.streets = streets
         return rules
 
     if typ_obszaru == "dzielnica w m.st. Warszawa":
