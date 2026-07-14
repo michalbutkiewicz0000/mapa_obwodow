@@ -70,7 +70,15 @@ function ensureObwodyLayer(tilesFile) {
       layout: { visibility: currentLevel === "obwody" ? "visible" : "none" },
       paint: {
         "line-color": ["case", ["boolean", ["feature-state", "hover"], false], "#0f172a", "#94a3b8"],
-        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.5, 0.7],
+        // Szerokość obrysu zależna od zoomu: przy oddaleniu ~0 (tysiące obwodów
+        // = solidny kartogram bez "potłuczonego szkła"), przy zbliżeniu widoczne
+        // granice. Hover zawsze wyraźny (istotny tylko przy zbliżeniu).
+        "line-width": [
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          2.5,
+          ["interpolate", ["linear"], ["zoom"], 8, 0, 11, 0.7],
+        ],
       },
     },
     "carto-labels",

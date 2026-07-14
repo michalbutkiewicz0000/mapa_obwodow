@@ -76,13 +76,12 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
         source_path.unlink()
     gdf.to_file(source_path, driver="GeoJSON")
 
-    # Bez wymuszonego przerzedzania tippecanoe dropuje obwody dopiero, gdy kafelek
-    # przekroczy domyślny limit 500 KB — co daje niespójną gęstość: kafelek tuż pod
-    # limitem trzyma pełne ~15 tys. obwodów (przy z6 = "potłuczone szkło"), a
-    # sąsiedni mniej, co tworzy widoczną prostokątną granicę. --drop-densest-as-needed
-    # + niższy -M wymuszają jednolite przerzedzanie w widoku przeglądowym, a
-    # --extend-zooms-if-still-dropping i maxzoom (-zg) zachowują PEŁNY detal obwodów
-    # przy zbliżeniu (z9-10) — patrz weryfikacja: z10 nad miastami bez zmian.
+    # NIE przerzedzamy obwodów przy oddaleniu — pełny zestaw poligonów daje solidny
+    # kartogram na każdym zoomie. Efekt "potłuczonego szkła" w gęstych kafelkach nie
+    # bierze się z liczby poligonów, tylko z OBRYSÓW (przy z6 tysiące ramek 0.7px
+    # zakrywają wypełnienia) — rozwiązane po stronie klienta: szerokość obrysu obwodu
+    # zależna od zoomu (0 przy oddaleniu, widoczna przy zbliżeniu). Patrz app.js
+    # ensureObwodyLayer, "line-width".
     subprocess.run(
         [
             "tippecanoe",
@@ -90,15 +89,21 @@ def build_pmtiles(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
             "-l", "obwody",
             "-zg",
             "--force",
-            "--drop-densest-as-needed",
-            "--extend-zooms-if-still-dropping",
-            "-M", "120000",
             "--simplification=10",
             "--no-tile-compression",
             str(source_path),
         ],
         check=True,
     )
+
+
+def _clean_str(value) -> str:
+    """Zwraca string albo "" dla braków. Uwaga: NaN (float z GeoJSON, gdy pole
+    puste) jest w Pythonie *truthy*, więc `value or ""` NIE odsiewa NaN — bez
+    tego `json.dumps` zapisze `NaN`, co jest niepoprawnym JSON-em i wywala
+    `JSON.parse` w przeglądarce (loadElection przerywa, warstwa obwodów zostaje
+    na poprzednich wyborach)."""
+    return value if isinstance(value, str) else ""
 
 
 def collect_results_index(areas: list[dict]) -> dict:
@@ -127,10 +132,10 @@ def collect_results_index(areas: list[dict]) -> dict:
                 "glosy_wazne": int(row.glosy_wazne) if pd.notna(row.glosy_wazne) else 0,
                 "winner": row.winner if isinstance(row.winner, str) else None,
                 "results": results if isinstance(results, dict) else {},
-                "komisja": getattr(row, "komisja", "") or "",
-                "dzielnica": getattr(row, "dzielnica", "") or "",
+                "komisja": _clean_str(getattr(row, "komisja", "")),
+                "dzielnica": _clean_str(getattr(row, "dzielnica", "")),
                 "wyborcy": int(wyborcy) if wyborcy is not None and pd.notna(wyborcy) else None,
-                "opis_granic": getattr(row, "opis_granic", "") or "",
+                "opis_granic": _clean_str(getattr(row, "opis_granic", "")),
             }
     return combined
 
@@ -162,7 +167,9 @@ def main() -> None:
 
         results = collect_results_index(areas)
         results_path = PROCESSED_DIR / f"results_{election_id}.json"
-        results_path.write_text(json.dumps(results, ensure_ascii=False), encoding="utf-8")
+        # allow_nan=False: jeśli mimo _clean_str gdzieś przecieknie NaN/Inf,
+        # niech build wywali się głośno, zamiast wygenerować niepoprawny JSON.
+        results_path.write_text(json.dumps(results, ensure_ascii=False, allow_nan=False), encoding="utf-8")
         print(f"  {len(results)} obwodów z wynikami -> {results_path.name}")
 
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
