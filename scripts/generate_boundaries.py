@@ -249,6 +249,17 @@ def main() -> None:
         default=None,
         help="podkatalog data/generated/{suffix}/ na surowe poligony (żeby nie nadpisać domyślnego przebiegu)",
     )
+    parser.add_argument(
+        "--manifest-fragment",
+        default=None,
+        help=(
+            "zamiast (lub oprócz) aktualizować manifest.json bezpośrednio, zapisz pełny "
+            "quality_report (z polem areas) do podanego pliku JSON. Używane przy równoległych "
+            "przebiegach na wielu procesach/maszynach — każdy zapisuje własny fragment, a "
+            "scripts/merge_manifest_fragments.py scala je jednym, bezpiecznym zapisem do "
+            "manifest.json na końcu (unika race condition przy równoczesnym read-modify-write)."
+        ),
+    )
     args = parser.parse_args()
 
     excel = load_excel(args.registry) if args.registry else load_excel()
@@ -304,7 +315,13 @@ def main() -> None:
     ok = sum(1 for r in quality_report if r.get("quality") in ("generated", "approximate", "poor"))
     print(f"Podsumowanie: {ok}/{len(quality_report)} przetworzone bez błędu krytycznego")
 
-    if not args.no_manifest:
+    if args.manifest_fragment:
+        fragment_path = Path(args.manifest_fragment)
+        fragment_path.parent.mkdir(parents=True, exist_ok=True)
+        fragment_path.write_text(json.dumps(quality_report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Fragment manifestu (z areas): {fragment_path}")
+
+    if not args.no_manifest and not args.manifest_fragment:
         update_manifest(quality_report)
 
 
