@@ -113,6 +113,23 @@ def test_parse_opis_granic_wies():
     assert "Stara Wieś" in rules.villages
 
 
+def test_parse_opis_granic_wies_strips_type_prefix():
+    # Rejestr PKW poprzedza nazwy miejscowości słowem opisującym ich typ
+    # ("wieś X", "kolonia Y", "Sołectwo: Z") — PRG i granice gmin mają samą
+    # nazwę bez prefiksu. Bez usunięcia go 0% adresów dopasowywało się w
+    # większości gmin wiejskich (wykryte dopiero przy próbie wygenerowania
+    # granic dla całej Polski — Kraków i wcześniej wygenerowane miasta są
+    # typu "miasto", nie dotykają tej gałęzi parsera).
+    rules = parse_opis_granic(1, "wieś", "wieś Droszków, wieś Jaszkowa Górna, wieś Rogówek, kolonia Gaj")
+    assert rules.villages == ["Droszków", "Jaszkowa Górna", "Rogówek", "Gaj"]
+
+    rules_single = parse_opis_granic(2, "wieś", "wieś Boguszyn")
+    assert rules_single.villages == ["Boguszyn"]
+
+    rules_solectwo = parse_opis_granic(3, "wieś", "Sołectwo: Podgórze")
+    assert rules_solectwo.villages == ["Podgórze"]
+
+
 def test_parse_opis_granic_miasto_streets():
     rules = parse_opis_granic(1, "miasto", "Długa, Krótka")
     names = [s.name for s in rules.streets]

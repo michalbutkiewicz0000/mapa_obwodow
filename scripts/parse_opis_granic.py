@@ -7,6 +7,14 @@ from typing import Literal
 
 Parity = Literal["odd", "even", "all"]
 
+# Słowa opisujące typ miejscowości, którymi rejestr PKW poprzedza nazwę wsi
+# ("wieś Boguszyn", "Sołectwo: X", "przysiółek Y") — do usunięcia przed
+# porównaniem z PRG/granicami gmin (patrz parse_opis_granic, gałąź "wieś").
+VILLAGE_PREFIX_RE = re.compile(
+    r"^(wie[śs]|kolonia|so[łl]ectwo|so[łl]ectwa|przysi[óo][łl]ek|osada|miejscowo[śs][ćc]|miejscowo[śs]ci)\s*:?\s*",
+    re.I,
+)
+
 
 @dataclass
 class NumberRange:
@@ -322,7 +330,21 @@ def parse_opis_granic(obwod: int, typ_obszaru: str, raw: str) -> ObwodRules:
     rules = ObwodRules(obwod=obwod, typ_obszaru=typ_obszaru, raw=text)
 
     if typ_obszaru == "wieś" or (typ_obszaru == "miasto i wieś" and "ulice" not in text.lower()):
-        villages = [part.strip() for part in re.split(r",| i ", text) if part.strip()]
+        # Rejestr PKW poprzedza nazwy miejscowości słowem opisującym ich typ
+        # ("wieś Boguszyn", "kolonia Gaj", "Sołectwo: X", "przysiółek Y") — ale
+        # PRG (miejscowosc) i granice gmin mają samą nazwę bez tego prefiksu.
+        # Bez usunięcia go żadna miejscowość się nie dopasowywała (0% adresów
+        # dla większości gmin wiejskich w kraju — wykryte dopiero przy próbie
+        # wygenerowania granic dla całej Polski, bo Kraków i 21 wcześniej
+        # wygenerowanych miast są typu "miasto", nie dotykają tej gałęzi).
+        villages = []
+        for part in re.split(r",| i ", text):
+            part = part.strip()
+            if not part:
+                continue
+            part = VILLAGE_PREFIX_RE.sub("", part).strip()
+            if part:
+                villages.append(part)
         rules.villages = villages
         return rules
 

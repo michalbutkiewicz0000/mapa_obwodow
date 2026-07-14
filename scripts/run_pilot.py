@@ -85,7 +85,11 @@ def assign_addresses(addresses: gpd.GeoDataFrame, rules_list: list) -> gpd.GeoDa
     village_col = assigned["miejscowosc"] if "miejscowosc" in assigned.columns else pd.Series([None] * total)
     rows = list(zip(assigned["street"], assigned["number"], village_col))
 
-    workers = min(os.cpu_count() or 1, 10)
+    # Nadpisywalne przez PRG_MAX_WORKERS — przydatne przy uruchamianiu wielu
+    # gmin równolegle (osobne procesy generate_boundaries.py na tej samej
+    # maszynie), gdzie każdy proces powinien używać mniej niż wszystkich rdzeni.
+    max_workers = int(os.environ.get("PRG_MAX_WORKERS", "10"))
+    workers = min(os.cpu_count() or 1, max_workers)
     if total < 2000 or workers <= 1:
         chunk_results = _assign_chunk((rows, rules_list))
     else:
