@@ -133,7 +133,18 @@ def build_voronoi_polygons(assigned: gpd.GeoDataFrame, boundary=None) -> gpd.Geo
     cells = gpd.GeoDataFrame(geometry=list(regions.geoms), crs=points.crs)
     joined = gpd.sjoin(cells, points[["obwod", "geometry"]], predicate="contains", how="inner")
     if boundary is not None:
-        joined["geometry"] = joined.geometry.intersection(boundary)
+        # Granice gmin (i sporadycznie komórki Voronoi) bywają niepoprawne
+        # topologicznie — samoprzecięcia, brakująca krawędź pierścienia. Bez
+        # uprawomocnienia intersection() rzuca GEOSException i cała gmina pada
+        # (9 gmin w kraju: 120802, 240701, 303108, ...). make_valid naprawia je
+        # przed przycięciem.
+        if not boundary.is_valid:
+            boundary = shapely.make_valid(boundary)
+        geoms = joined.geometry
+        invalid = ~geoms.is_valid
+        if invalid.any():
+            geoms = geoms.where(~invalid, geoms.apply(lambda g: shapely.make_valid(g)))
+        joined["geometry"] = geoms.intersection(boundary)
     dissolved = joined.dissolve(by="obwod").reset_index()
     dissolved = dissolved[["obwod", "geometry"]]
     return dissolved
