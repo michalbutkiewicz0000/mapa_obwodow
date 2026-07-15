@@ -119,7 +119,15 @@ def export_election_areas(
 
     areas = {}
     for election_id, results in national_results.items():
-        merged = polygons.merge(results, on=["teryt", "obwod"], how="left")
+        # Geometria powstaje z JEDNEGO rejestru (Excel PKW, styczeń 2024), ale zbiór
+        # obwodów bywa różny per wybory — np. Gronowo Elbląskie miało obwód 5 w
+        # wyborach parlamentarnych, a w prezydenckich już nie. Bez tego filtra taki
+        # "obwód-duch" pojawiał się jako pusty poligon (winner=None) w elekcji, w
+        # której nie istniał. indicator + "both" zostawia tylko obwody obecne w
+        # rejestrze DANYCH wyborów (obwód z protokołem, choćby 0 głosów, zostaje;
+        # znika tylko ten całkowicie nieobecny w wynikach elekcji).
+        merged = polygons.merge(results, on=["teryt", "obwod"], how="left", indicator=True)
+        merged = merged[merged["_merge"] == "both"].drop(columns="_merge")
         matched = int(merged["winner"].notna().sum())
         total = int(len(merged))
 
